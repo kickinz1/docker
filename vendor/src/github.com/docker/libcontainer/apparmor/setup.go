@@ -7,14 +7,23 @@ import (
 	"path"
 )
 
-const (
-	DefaultProfilePath = "/etc/apparmor.d/docker"
+var (
+    DefaultProfilePath string
 )
 
 func InstallDefaultProfile() error {
+
 	if !IsEnabled() {
 		return nil
 	}
+
+    // Add support for snappy as /etc/docker is readonly on snappy
+	if os.Getenv("SNAP_APP_DATA_PATH") != "" {
+		DefaultProfilePath = "/var/lib/apparmor/profiles/docker"
+	} else {
+		DefaultProfilePath = "/etc/apparmor.d/docker"
+	}
+	
 
 	// Make sure /etc/apparmor.d exists
 	if err := os.MkdirAll(path.Dir(DefaultProfilePath), 0755); err != nil {
@@ -34,8 +43,12 @@ func InstallDefaultProfile() error {
 	cmd := exec.Command("/sbin/apparmor_parser", "-r", "-W", "docker")
 	// to use the parser directly we have to make sure we are in the correct
 	// dir with the profile
-	cmd.Dir = "/etc/apparmor.d"
-
+	if os.Getenv("SNAP_APP_DATA_PATH") != "" {
+		cmd.Dir = "/var/lib/apparmor/profiles"
+	} else {
+		cmd.Dir = "/etc/apparmor.d"
+	}
+	
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("Error loading docker apparmor profile: %s (%s)", err, output)

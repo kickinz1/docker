@@ -27,7 +27,11 @@ func getDaemonConfDir() string {
 	if runtime.GOOS == "windows" {
 		return filepath.Join(homedir.Get(), ".docker")
 	}
-	return "/etc/docker"
+    // Add support for snappy as /etc/docker is readonly on snappy
+	if os.Getenv("SNAP_APP_DATA_PATH") != "" {
+		return filepath.Join(os.Getenv("SNAP_APP_DATA_PATH"),"/etc/docker")
+	}
+	return "/etc/docker" 
 }
 
 var (
