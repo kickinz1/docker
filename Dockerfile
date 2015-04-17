@@ -1,4 +1,4 @@
-# This file describes the standard way to build Docker, using docker
+7# This file describes the standard way to build Docker, using docker
 #
 # Usage:
 #
@@ -23,7 +23,7 @@
 # the case. Therefore, you don't have to disable it anymore.
 #
 
-FROM ubuntu:14.04
+FROM armbuild/ubuntu:14.04
 MAINTAINER Tianon Gravi <admwiggin@gmail.com> (@tianon)
 
 # Packaged dependencies
@@ -82,11 +82,12 @@ ENV GOPATH /go:/go/src/github.com/docker/docker/vendor
 RUN cd /usr/local/go/src && ./make.bash --no-clean 2>&1
 
 # Compile Go for cross compilation
-ENV DOCKER_CROSSPLATFORMS \
-	linux/386 linux/arm \
-	darwin/amd64 darwin/386 \
-	freebsd/amd64 freebsd/386 freebsd/arm \
-	windows/amd64 windows/386
+# Just for linux/arm, to speed-up building on arm
+ENV DOCKER_CROSSPLATFORMS linux/arm
+#	linux/386 linux/arm \
+#	darwin/amd64 darwin/386 \
+#	freebsd/amd64 freebsd/386 freebsd/arm \
+#	windows/amd64 windows/386
 
 # (set an explicit GOARM of 5 for maximum compatibility)
 ENV GOARM 5
@@ -100,7 +101,8 @@ RUN cd /usr/local/go/src \
 
 # We still support compiling with older Go, so need to grab older "gofmt"
 ENV GOFMT_VERSION 1.3.3
-RUN curl -sSL https://storage.googleapis.com/golang/go${GOFMT_VERSION}.$(go env GOOS)-$(go env GOARCH).tar.gz | tar -C /go/bin -xz --strip-components=2 go/bin/gofmt
+#RUN curl -sSL https://storage.googleapis.com/golang/go${GOFMT_VERSION}.$(go env GOOS)-$(go env GOARCH).tar.gz | tar -C /go/bin -xz --strip-components=2 go/bin/gofmt
+#RUN curl -sSL http://dave.cheney.net/paste/go1.4.2.linux-arm~multiarch-armv7-1.tar.gz | tar -C /go/bin -xz --strip-components=2 go/bin/gofmt
 
 # Update this sha when we upgrade to go 1.5.0
 ENV GO_TOOLS_COMMIT 069d2f3bcb68257b627205f0486d6cc69a231ff9
