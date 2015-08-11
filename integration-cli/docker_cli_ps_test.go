@@ -18,14 +18,14 @@ func TestPsListContainers(t *testing.T) {
 	if err != nil {
 		t.Fatal(out, err)
 	}
-	firstID := strings.TrimSpace(out)
+	firstID := stripTrailingCharacters(out)
 
 	runCmd = exec.Command(dockerBinary, "run", "-d", "busybox", "top")
 	out, _, err = runCommandWithOutput(runCmd)
 	if err != nil {
 		t.Fatal(out, err)
 	}
-	secondID := strings.TrimSpace(out)
+	secondID := stripTrailingCharacters(out)
 
 	// not long running
 	runCmd = exec.Command(dockerBinary, "run", "-d", "busybox", "true")
@@ -33,29 +33,19 @@ func TestPsListContainers(t *testing.T) {
 	if err != nil {
 		t.Fatal(out, err)
 	}
-	thirdID := strings.TrimSpace(out)
+	thirdID := stripTrailingCharacters(out)
 
 	runCmd = exec.Command(dockerBinary, "run", "-d", "busybox", "top")
 	out, _, err = runCommandWithOutput(runCmd)
 	if err != nil {
 		t.Fatal(out, err)
 	}
-	fourthID := strings.TrimSpace(out)
-
-	// make sure the second is running
-	if err := waitRun(secondID); err != nil {
-		t.Fatalf("waiting for container failed: %v", err)
-	}
+	fourthID := stripTrailingCharacters(out)
 
 	// make sure third one is not running
 	runCmd = exec.Command(dockerBinary, "wait", thirdID)
 	if out, _, err = runCommandWithOutput(runCmd); err != nil {
 		t.Fatal(out, err)
-	}
-
-	// make sure the forth is running
-	if err := waitRun(fourthID); err != nil {
-		t.Fatalf("waiting for container failed: %v", err)
 	}
 
 	// all
@@ -66,7 +56,7 @@ func TestPsListContainers(t *testing.T) {
 	}
 
 	if !assertContainerList(out, []string{fourthID, thirdID, secondID, firstID}) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	// running
@@ -77,7 +67,7 @@ func TestPsListContainers(t *testing.T) {
 	}
 
 	if !assertContainerList(out, []string{fourthID, secondID, firstID}) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	// from here all flag '-a' is ignored
@@ -91,7 +81,7 @@ func TestPsListContainers(t *testing.T) {
 	expected := []string{fourthID, thirdID}
 
 	if !assertContainerList(out, expected) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	runCmd = exec.Command(dockerBinary, "ps", "-n=2")
@@ -101,7 +91,7 @@ func TestPsListContainers(t *testing.T) {
 	}
 
 	if !assertContainerList(out, expected) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	// since
@@ -113,7 +103,7 @@ func TestPsListContainers(t *testing.T) {
 	expected = []string{fourthID, thirdID, secondID}
 
 	if !assertContainerList(out, expected) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	runCmd = exec.Command(dockerBinary, "ps", "--since", firstID)
@@ -123,7 +113,7 @@ func TestPsListContainers(t *testing.T) {
 	}
 
 	if !assertContainerList(out, expected) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	// before
@@ -135,7 +125,7 @@ func TestPsListContainers(t *testing.T) {
 	expected = []string{secondID, firstID}
 
 	if !assertContainerList(out, expected) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	runCmd = exec.Command(dockerBinary, "ps", "--before", thirdID)
@@ -145,7 +135,7 @@ func TestPsListContainers(t *testing.T) {
 	}
 
 	if !assertContainerList(out, expected) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	// since & before
@@ -157,7 +147,7 @@ func TestPsListContainers(t *testing.T) {
 	expected = []string{thirdID, secondID}
 
 	if !assertContainerList(out, expected) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	runCmd = exec.Command(dockerBinary, "ps", "--since", firstID, "--before", fourthID)
@@ -166,7 +156,7 @@ func TestPsListContainers(t *testing.T) {
 		t.Fatal(out, err)
 	}
 	if !assertContainerList(out, expected) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	// since & limit
@@ -178,7 +168,7 @@ func TestPsListContainers(t *testing.T) {
 	expected = []string{fourthID, thirdID}
 
 	if !assertContainerList(out, expected) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	runCmd = exec.Command(dockerBinary, "ps", "--since", firstID, "-n=2")
@@ -188,7 +178,7 @@ func TestPsListContainers(t *testing.T) {
 	}
 
 	if !assertContainerList(out, expected) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	// before & limit
@@ -200,7 +190,7 @@ func TestPsListContainers(t *testing.T) {
 	expected = []string{thirdID}
 
 	if !assertContainerList(out, expected) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	runCmd = exec.Command(dockerBinary, "ps", "--before", fourthID, "-n=1")
@@ -210,7 +200,7 @@ func TestPsListContainers(t *testing.T) {
 	}
 
 	if !assertContainerList(out, expected) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	// since & before & limit
@@ -222,7 +212,7 @@ func TestPsListContainers(t *testing.T) {
 	expected = []string{thirdID}
 
 	if !assertContainerList(out, expected) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	runCmd = exec.Command(dockerBinary, "ps", "--since", firstID, "--before", fourthID, "-n=1")
@@ -232,7 +222,7 @@ func TestPsListContainers(t *testing.T) {
 	}
 
 	if !assertContainerList(out, expected) {
-		t.Errorf("Container list is not in the correct order: %s", out)
+		t.Error("Container list is not in the correct order")
 	}
 
 	logDone("ps - test ps options")
@@ -261,11 +251,11 @@ func TestPsListContainersSize(t *testing.T) {
 	cmd := exec.Command(dockerBinary, "run", "-d", "busybox", "echo", "hello")
 	runCommandWithOutput(cmd)
 	cmd = exec.Command(dockerBinary, "ps", "-s", "-n=1")
-	baseOut, _, err := runCommandWithOutput(cmd)
-	baseLines := strings.Split(strings.Trim(baseOut, "\n "), "\n")
-	baseSizeIndex := strings.Index(baseLines[0], "SIZE")
-	baseFoundsize := baseLines[1][baseSizeIndex:]
-	baseBytes, err := strconv.Atoi(strings.Split(baseFoundsize, " ")[0])
+	base_out, _, err := runCommandWithOutput(cmd)
+	base_lines := strings.Split(strings.Trim(base_out, "\n "), "\n")
+	base_sizeIndex := strings.Index(base_lines[0], "SIZE")
+	base_foundSize := base_lines[1][base_sizeIndex:]
+	base_bytes, err := strconv.Atoi(strings.Split(base_foundSize, " ")[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,16 +286,13 @@ func TestPsListContainersSize(t *testing.T) {
 		t.Fatal(out, err)
 	}
 	lines := strings.Split(strings.Trim(out, "\n "), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("Expected 2 lines for 'ps -s -n=1' output, got %d", len(lines))
-	}
 	sizeIndex := strings.Index(lines[0], "SIZE")
 	idIndex := strings.Index(lines[0], "CONTAINER ID")
 	foundID := lines[1][idIndex : idIndex+12]
 	if foundID != id[:12] {
 		t.Fatalf("Expected id %s, got %s", id[:12], foundID)
 	}
-	expectedSize := fmt.Sprintf("%d B", (2 + baseBytes))
+	expectedSize := fmt.Sprintf("%d B", (2 + base_bytes))
 	foundSize := lines[1][sizeIndex:]
 	if foundSize != expectedSize {
 		t.Fatalf("Expected size %q, got %q", expectedSize, foundSize)
@@ -325,7 +312,7 @@ func TestPsListContainersFilterStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(out, err)
 	}
-	firstID := strings.TrimSpace(out)
+	firstID := stripTrailingCharacters(out)
 
 	// make sure the exited cintainer is not running
 	runCmd = exec.Command(dockerBinary, "wait", firstID)
@@ -339,7 +326,7 @@ func TestPsListContainersFilterStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(out, err)
 	}
-	secondID := strings.TrimSpace(out)
+	secondID := stripTrailingCharacters(out)
 
 	// filter containers by exited
 	runCmd = exec.Command(dockerBinary, "ps", "-q", "--filter=status=exited")
@@ -374,10 +361,10 @@ func TestPsListContainersFilterID(t *testing.T) {
 	if err != nil {
 		t.Fatal(out, err)
 	}
-	firstID := strings.TrimSpace(out)
+	firstID := stripTrailingCharacters(out)
 
 	// start another container
-	runCmd = exec.Command(dockerBinary, "run", "-d", "busybox", "top")
+	runCmd = exec.Command(dockerBinary, "run", "-d", "busybox", "sh", "-c", "sleep 360")
 	if out, _, err = runCommandWithOutput(runCmd); err != nil {
 		t.Fatal(out, err)
 	}
@@ -404,10 +391,10 @@ func TestPsListContainersFilterName(t *testing.T) {
 	if err != nil {
 		t.Fatal(out, err)
 	}
-	firstID := strings.TrimSpace(out)
+	firstID := stripTrailingCharacters(out)
 
 	// start another container
-	runCmd = exec.Command(dockerBinary, "run", "-d", "--name=b_name_to_match", "busybox", "top")
+	runCmd = exec.Command(dockerBinary, "run", "-d", "--name=b_name_to_match", "busybox", "sh", "-c", "sleep 360")
 	if out, _, err = runCommandWithOutput(runCmd); err != nil {
 		t.Fatal(out, err)
 	}
@@ -432,21 +419,21 @@ func TestPsListContainersFilterLabel(t *testing.T) {
 	if err != nil {
 		t.Fatal(out, err)
 	}
-	firstID := strings.TrimSpace(out)
+	firstID := stripTrailingCharacters(out)
 
 	// start another container
 	runCmd = exec.Command(dockerBinary, "run", "-d", "-l", "match=me too", "busybox")
 	if out, _, err = runCommandWithOutput(runCmd); err != nil {
 		t.Fatal(out, err)
 	}
-	secondID := strings.TrimSpace(out)
+	secondID := stripTrailingCharacters(out)
 
 	// start third container
 	runCmd = exec.Command(dockerBinary, "run", "-d", "-l", "nomatch=me", "busybox")
 	if out, _, err = runCommandWithOutput(runCmd); err != nil {
 		t.Fatal(out, err)
 	}
-	thirdID := strings.TrimSpace(out)
+	thirdID := stripTrailingCharacters(out)
 
 	// filter containers by exact match
 	runCmd = exec.Command(dockerBinary, "ps", "-a", "-q", "--no-trunc", "--filter=label=match=me")
@@ -545,7 +532,7 @@ func TestPsListContainersFilterExited(t *testing.T) {
 	}
 	ids := strings.Split(strings.TrimSpace(out), "\n")
 	if len(ids) != 2 {
-		t.Fatalf("Should be 2 zero exited containers got %d: %s", len(ids), out)
+		t.Fatalf("Should be 2 zero exited containerst got %d", len(ids))
 	}
 	if ids[0] != secondZero {
 		t.Fatalf("First in list should be %q, got %q", secondZero, ids[0])
@@ -594,21 +581,6 @@ func TestPsRightTagName(t *testing.T) {
 	} else {
 		id2 = strings.TrimSpace(string(out))
 	}
-
-	var imageID string
-	if out, err := exec.Command(dockerBinary, "inspect", "-f", "{{.Id}}", "busybox").CombinedOutput(); err != nil {
-		t.Fatalf("failed to get the image ID of busybox: %s, %v", out, err)
-	} else {
-		imageID = strings.TrimSpace(string(out))
-	}
-
-	var id3 string
-	if out, err := exec.Command(dockerBinary, "run", "-d", imageID, "top").CombinedOutput(); err != nil {
-		t.Fatalf("Failed to run container: %s, out: %q", err, out)
-	} else {
-		id3 = strings.TrimSpace(string(out))
-	}
-
 	out, err := exec.Command(dockerBinary, "ps", "--no-trunc").CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to run 'ps': %s, out: %q", err, out)
@@ -616,26 +588,22 @@ func TestPsRightTagName(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	// skip header
 	lines = lines[1:]
-	if len(lines) != 3 {
-		t.Fatalf("There should be 3 running container, got %d", len(lines))
+	if len(lines) != 2 {
+		t.Fatalf("There should be 2 running container, got %d", len(lines))
 	}
 	for _, line := range lines {
 		f := strings.Fields(line)
 		switch f[0] {
 		case id1:
-			if f[1] != "busybox" {
+			if f[1] != "busybox:latest" {
 				t.Fatalf("Expected %s tag for id %s, got %s", "busybox", id1, f[1])
 			}
 		case id2:
 			if f[1] != tag {
-				t.Fatalf("Expected %s tag for id %s, got %s", tag, id2, f[1])
-			}
-		case id3:
-			if f[1] != imageID {
-				t.Fatalf("Expected %s imageID for id %s, got %s", tag, id3, f[1])
+				t.Fatalf("Expected %s tag for id %s, got %s", tag, id1, f[1])
 			}
 		default:
-			t.Fatalf("Unexpected id %s, expected %s and %s and %s", f[0], id1, id2, id3)
+			t.Fatalf("Unexpected id %s, expected %s and %s", f[0], id1, id2)
 		}
 	}
 	logDone("ps - right tags for containers")
@@ -670,7 +638,7 @@ func TestPsLinkedWithNoTrunc(t *testing.T) {
 func TestPsGroupPortRange(t *testing.T) {
 	defer deleteAllContainers()
 
-	portRange := "3800-3900"
+	portRange := "3300-3900"
 	out, _, err := runCommandWithOutput(exec.Command(dockerBinary, "run", "-d", "--name", "porttest", "-p", portRange+":"+portRange, "busybox", "top"))
 	if err != nil {
 		t.Fatal(out, err)

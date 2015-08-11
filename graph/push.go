@@ -8,15 +8,14 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"strings"
 	"sync"
 
-	"github.com/Sirupsen/logrus"
-	"github.com/docker/distribution/digest"
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/image"
+	"github.com/docker/docker/pkg/common"
 	"github.com/docker/docker/pkg/progressreader"
-	"github.com/docker/docker/pkg/streamformatter"
-	"github.com/docker/docker/pkg/stringid"
 	"github.com/docker/docker/registry"
 	"github.com/docker/docker/runconfig"
 	"github.com/docker/docker/utils"
@@ -73,14 +72,14 @@ func (s *TagStore) getImageList(localRepo map[string]string, requestedTag string
 	if len(imageList) == 0 {
 		return nil, nil, fmt.Errorf("No images found for the requested repository / tag")
 	}
-	logrus.Debugf("Image list: %v", imageList)
-	logrus.Debugf("Tags by image: %v", tagsByImage)
+	log.Debugf("Image list: %v", imageList)
+	log.Debugf("Tags by image: %v", tagsByImage)
 
 	return imageList, tagsByImage, nil
 }
 
 func (s *TagStore) getImageTags(localRepo map[string]string, askedTag string) ([]string, error) {
-	logrus.Debugf("Checking %s against %#v", askedTag, localRepo)
+	log.Debugf("Checking %s against %#v", askedTag, localRepo)
 	if len(askedTag) > 0 {
 		if _, ok := localRepo[askedTag]; !ok || utils.DigestReference(askedTag) {
 			return nil, fmt.Errorf("Tag does not exist: %s", askedTag)
@@ -129,21 +128,21 @@ type imagePushData struct {
 
 // lookupImageOnEndpoint checks the specified endpoint to see if an image exists
 // and if it is absent then it sends the image id to the channel to be pushed.
-func lookupImageOnEndpoint(wg *sync.WaitGroup, r *registry.Session, out io.Writer, sf *streamformatter.StreamFormatter,
+func lookupImageOnEndpoint(wg *sync.WaitGroup, r *registry.Session, out io.Writer, sf *utils.StreamFormatter,
 	images chan imagePushData, imagesToPush chan string) {
 	defer wg.Done()
 	for image := range images {
 		if err := r.LookupRemoteImage(image.id, image.endpoint, image.tokens); err != nil {
-			logrus.Errorf("Error in LookupRemoteImage: %s", err)
+			log.Errorf("Error in LookupRemoteImage: %s", err)
 			imagesToPush <- image.id
 			continue
 		}
-		out.Write(sf.FormatStatus("", "Image %s already pushed, skipping", stringid.TruncateID(image.id)))
+		out.Write(sf.FormatStatus("", "Image %s already pushed, skipping", common.TruncateID(image.id)))
 	}
 }
 
 func (s *TagStore) pushImageToEndpoint(endpoint string, out io.Writer, remoteName string, imageIDs []string,
-	tags map[string][]string, repo *registry.RepositoryData, sf *streamformatter.StreamFormatter, r *registry.Session) error {
+	tags map[string][]string, repo *registry.RepositoryData, sf *utils.StreamFormatter, r *registry.Session) error {
 	workerCount := len(imageIDs)
 	// start a maximum of 5 workers to check if images exist on the specified endpoint.
 	if workerCount > 5 {
@@ -190,7 +189,7 @@ func (s *TagStore) pushImageToEndpoint(endpoint string, out io.Writer, remoteNam
 			}
 		}
 		for _, tag := range tags[id] {
-			out.Write(sf.FormatStatus("", "Pushing tag for rev [%s] on {%s}", stringid.TruncateID(id), endpoint+"repositories/"+remoteName+"/tags/"+tag))
+			out.Write(sf.FormatStatus("", "Pushing tag for rev [%s] on {%s}", common.TruncateID(id), endpoint+"repositories/"+remoteName+"/tags/"+tag))
 			if err := r.PushRegistryTag(remoteName, id, tag, endpoint, repo.Tokens); err != nil {
 				return err
 			}
@@ -202,8 +201,8 @@ func (s *TagStore) pushImageToEndpoint(endpoint string, out io.Writer, remoteNam
 // pushRepository pushes layers that do not already exist on the registry.
 func (s *TagStore) pushRepository(r *registry.Session, out io.Writer,
 	repoInfo *registry.RepositoryInfo, localRepo map[string]string,
-	tag string, sf *streamformatter.StreamFormatter) error {
-	logrus.Debugf("Local repo: %s", localRepo)
+	tag string, sf *utils.StreamFormatter) error {
+	log.Debugf("Local repo: %s", localRepo)
 	out = utils.NewWriteFlusher(out)
 	imgList, tags, err := s.getImageList(localRepo, tag)
 	if err != nil {
@@ -212,9 +211,9 @@ func (s *TagStore) pushRepository(r *registry.Session, out io.Writer,
 	out.Write(sf.FormatStatus("", "Sending image list"))
 
 	imageIndex := s.createImageIndex(imgList, tags)
-	logrus.Debugf("Preparing to push %s with the following images and tags", localRepo)
+	log.Debugf("Preparing to push %s with the following images and tags", localRepo)
 	for _, data := range imageIndex {
-		logrus.Debugf("Pushing ID: %s with Tag: %s", data.ID, data.Tag)
+		log.Debugf("Pushing ID: %s with Tag: %s", data.ID, data.Tag)
 	}
 	// Register all the images in a repository with the registry
 	// If an image is not in this list it will not be associated with the repository
@@ -237,13 +236,13 @@ func (s *TagStore) pushRepository(r *registry.Session, out io.Writer,
 	return err
 }
 
-func (s *TagStore) pushImage(r *registry.Session, out io.Writer, imgID, ep string, token []string, sf *streamformatter.StreamFormatter) (checksum string, err error) {
+func (s *TagStore) pushImage(r *registry.Session, out io.Writer, imgID, ep string, token []string, sf *utils.StreamFormatter) (checksum string, err error) {
 	out = utils.NewWriteFlusher(out)
 	jsonRaw, err := ioutil.ReadFile(path.Join(s.graph.Root, imgID, "json"))
 	if err != nil {
 		return "", fmt.Errorf("Cannot retrieve the path for {%s}: %s", imgID, err)
 	}
-	out.Write(sf.FormatProgress(stringid.TruncateID(imgID), "Pushing", nil))
+	out.Write(sf.FormatProgress(common.TruncateID(imgID), "Pushing", nil))
 
 	imgData := &registry.ImgData{
 		ID: imgID,
@@ -252,7 +251,7 @@ func (s *TagStore) pushImage(r *registry.Session, out io.Writer, imgID, ep strin
 	// Send the json
 	if err := r.PushImageJSONRegistry(imgData, jsonRaw, ep, token); err != nil {
 		if err == registry.ErrAlreadyExists {
-			out.Write(sf.FormatProgress(stringid.TruncateID(imgData.ID), "Image already pushed, skipping", nil))
+			out.Write(sf.FormatProgress(common.TruncateID(imgData.ID), "Image already pushed, skipping", nil))
 			return "", nil
 		}
 		return "", err
@@ -265,7 +264,7 @@ func (s *TagStore) pushImage(r *registry.Session, out io.Writer, imgID, ep strin
 	defer os.RemoveAll(layerData.Name())
 
 	// Send the layer
-	logrus.Debugf("rendered layer for %s of [%d] size", imgData.ID, layerData.Size)
+	log.Debugf("rendered layer for %s of [%d] size", imgData.ID, layerData.Size)
 
 	checksum, checksumPayload, err := r.PushImageLayerRegistry(imgData.ID,
 		progressreader.New(progressreader.Config{
@@ -274,7 +273,7 @@ func (s *TagStore) pushImage(r *registry.Session, out io.Writer, imgID, ep strin
 			Formatter: sf,
 			Size:      int(layerData.Size),
 			NewLines:  false,
-			ID:        stringid.TruncateID(imgData.ID),
+			ID:        common.TruncateID(imgData.ID),
 			Action:    "Pushing",
 		}), ep, token, jsonRaw)
 	if err != nil {
@@ -287,15 +286,15 @@ func (s *TagStore) pushImage(r *registry.Session, out io.Writer, imgID, ep strin
 		return "", err
 	}
 
-	out.Write(sf.FormatProgress(stringid.TruncateID(imgData.ID), "Image successfully pushed", nil))
+	out.Write(sf.FormatProgress(common.TruncateID(imgData.ID), "Image successfully pushed", nil))
 	return imgData.Checksum, nil
 }
 
-func (s *TagStore) pushV2Repository(r *registry.Session, localRepo Repository, out io.Writer, repoInfo *registry.RepositoryInfo, tag string, sf *streamformatter.StreamFormatter) error {
+func (s *TagStore) pushV2Repository(r *registry.Session, localRepo Repository, out io.Writer, repoInfo *registry.RepositoryInfo, tag string, sf *utils.StreamFormatter) error {
 	endpoint, err := r.V2RegistryEndpoint(repoInfo.Index)
 	if err != nil {
 		if repoInfo.Index.Official {
-			logrus.Debugf("Unable to push to V2 registry, falling back to v1: %s", err)
+			log.Debugf("Unable to push to V2 registry, falling back to v1: %s", err)
 			return ErrV2RegistryUnavailable
 		}
 		return fmt.Errorf("error getting registry endpoint: %s", err)
@@ -315,7 +314,7 @@ func (s *TagStore) pushV2Repository(r *registry.Session, localRepo Repository, o
 	}
 
 	for _, tag := range tags {
-		logrus.Debugf("Pushing repository: %s:%s", repoInfo.CanonicalName, tag)
+		log.Debugf("Pushing repository: %s:%s", repoInfo.CanonicalName, tag)
 
 		layerId, exists := localRepo[tag]
 		if !exists {
@@ -356,7 +355,7 @@ func (s *TagStore) pushV2Repository(r *registry.Session, localRepo Repository, o
 
 		// Schema version 1 requires layer ordering from top to root
 		for i, layer := range layers {
-			logrus.Debugf("Pushing layer: %s", layer.ID)
+			log.Debugf("Pushing layer: %s", layer.ID)
 
 			if layer.Config != nil && metadata.Image != layer.ID {
 				err = runconfig.Merge(&metadata, layer.Config)
@@ -376,15 +375,15 @@ func (s *TagStore) pushV2Repository(r *registry.Session, localRepo Repository, o
 
 			var exists bool
 			if len(checksum) > 0 {
-				dgst, err := digest.ParseDigest(checksum)
-				if err != nil {
-					return fmt.Errorf("Invalid checksum %s: %s", checksum, err)
+				sumParts := strings.SplitN(checksum, ":", 2)
+				if len(sumParts) < 2 {
+					return fmt.Errorf("Invalid checksum: %s", checksum)
 				}
 
 				// Call mount blob
-				exists, err = r.HeadV2ImageBlob(endpoint, repoInfo.RemoteName, dgst, auth)
+				exists, err = r.HeadV2ImageBlob(endpoint, repoInfo.RemoteName, sumParts[0], sumParts[1], auth)
 				if err != nil {
-					out.Write(sf.FormatProgress(stringid.TruncateID(layer.ID), "Image push failed", nil))
+					out.Write(sf.FormatProgress(common.TruncateID(layer.ID), "Image push failed", nil))
 					return err
 				}
 			}
@@ -399,7 +398,7 @@ func (s *TagStore) pushV2Repository(r *registry.Session, localRepo Repository, o
 					checksum = cs
 				}
 			} else {
-				out.Write(sf.FormatProgress(stringid.TruncateID(layer.ID), "Image already exists", nil))
+				out.Write(sf.FormatProgress(common.TruncateID(layer.ID), "Image already exists", nil))
 			}
 			m.FSLayers[i] = &registry.FSLayer{BlobSum: checksum}
 			m.History[i] = &registry.ManifestHistory{V1Compatibility: string(jsonData)}
@@ -409,7 +408,7 @@ func (s *TagStore) pushV2Repository(r *registry.Session, localRepo Repository, o
 			return fmt.Errorf("invalid manifest: %s", err)
 		}
 
-		logrus.Debugf("Pushing %s:%s to v2 repository", repoInfo.LocalName, tag)
+		log.Debugf("Pushing %s:%s to v2 repository", repoInfo.LocalName, tag)
 		mBytes, err := json.MarshalIndent(m, "", "   ")
 		if err != nil {
 			return err
@@ -427,7 +426,7 @@ func (s *TagStore) pushV2Repository(r *registry.Session, localRepo Repository, o
 		if err != nil {
 			return err
 		}
-		logrus.Infof("Signed manifest for %s:%s using daemon's key: %s", repoInfo.LocalName, tag, s.trustKey.KeyID())
+		log.Infof("Signed manifest for %s:%s using daemon's key: %s", repoInfo.LocalName, tag, s.trustKey.KeyID())
 
 		// push the manifest
 		digest, err := r.PutV2ImageManifest(endpoint, repoInfo.RemoteName, tag, signedBody, mBytes, auth)
@@ -441,8 +440,8 @@ func (s *TagStore) pushV2Repository(r *registry.Session, localRepo Repository, o
 }
 
 // PushV2Image pushes the image content to the v2 registry, first buffering the contents to disk
-func (s *TagStore) pushV2Image(r *registry.Session, img *image.Image, endpoint *registry.Endpoint, imageName string, sf *streamformatter.StreamFormatter, out io.Writer, auth *registry.RequestAuthorization) (string, error) {
-	out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), "Buffering to Disk", nil))
+func (s *TagStore) pushV2Image(r *registry.Session, img *image.Image, endpoint *registry.Endpoint, imageName string, sf *utils.StreamFormatter, out io.Writer, auth *registry.RequestAuthorization) (string, error) {
+	out.Write(sf.FormatProgress(common.TruncateID(img.ID), "Buffering to Disk", nil))
 
 	image, err := s.graph.Get(img.ID)
 	if err != nil {
@@ -466,41 +465,41 @@ func (s *TagStore) pushV2Image(r *registry.Session, img *image.Image, endpoint *
 	size, dgst, err := bufferToFile(tf, arch)
 
 	// Send the layer
-	logrus.Debugf("rendered layer for %s of [%d] size", img.ID, size)
+	log.Debugf("rendered layer for %s of [%d] size", img.ID, size)
 
-	if err := r.PutV2ImageBlob(endpoint, imageName, dgst,
+	if err := r.PutV2ImageBlob(endpoint, imageName, dgst.Algorithm(), dgst.Hex(),
 		progressreader.New(progressreader.Config{
 			In:        tf,
 			Out:       out,
 			Formatter: sf,
 			Size:      int(size),
 			NewLines:  false,
-			ID:        stringid.TruncateID(img.ID),
+			ID:        common.TruncateID(img.ID),
 			Action:    "Pushing",
 		}), auth); err != nil {
-		out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), "Image push failed", nil))
+		out.Write(sf.FormatProgress(common.TruncateID(img.ID), "Image push failed", nil))
 		return "", err
 	}
-	out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), "Image successfully pushed", nil))
+	out.Write(sf.FormatProgress(common.TruncateID(img.ID), "Image successfully pushed", nil))
 	return dgst.String(), nil
 }
 
 // FIXME: Allow to interrupt current push when new push of same image is done.
-func (s *TagStore) CmdPush(job *engine.Job) error {
+func (s *TagStore) CmdPush(job *engine.Job) engine.Status {
 	if n := len(job.Args); n != 1 {
-		return fmt.Errorf("Usage: %s IMAGE", job.Name)
+		return job.Errorf("Usage: %s IMAGE", job.Name)
 	}
 	var (
 		localName   = job.Args[0]
-		sf          = streamformatter.NewStreamFormatter(job.GetenvBool("json"))
+		sf          = utils.NewStreamFormatter(job.GetenvBool("json"))
 		authConfig  = &registry.AuthConfig{}
 		metaHeaders map[string][]string
 	)
 
 	// Resolve the Repository name from fqn to RepositoryInfo
-	repoInfo, err := s.registryService.ResolveRepository(localName)
+	repoInfo, err := registry.ResolveRepositoryInfo(job, localName)
 	if err != nil {
-		return err
+		return job.Error(err)
 	}
 
 	tag := job.Getenv("tag")
@@ -508,18 +507,18 @@ func (s *TagStore) CmdPush(job *engine.Job) error {
 	job.GetenvJson("metaHeaders", &metaHeaders)
 
 	if _, err := s.poolAdd("push", repoInfo.LocalName); err != nil {
-		return err
+		return job.Error(err)
 	}
 	defer s.poolRemove("push", repoInfo.LocalName)
 
 	endpoint, err := repoInfo.GetEndpoint()
 	if err != nil {
-		return err
+		return job.Error(err)
 	}
 
 	r, err := registry.NewSession(authConfig, registry.HTTPRequestFactory(metaHeaders), endpoint, false)
 	if err != nil {
-		return err
+		return job.Error(err)
 	}
 
 	reposLen := 1
@@ -530,25 +529,23 @@ func (s *TagStore) CmdPush(job *engine.Job) error {
 	// If it fails, try to get the repository
 	localRepo, exists := s.Repositories[repoInfo.LocalName]
 	if !exists {
-		return fmt.Errorf("Repository does not exist: %s", repoInfo.LocalName)
+		return job.Errorf("Repository does not exist: %s", repoInfo.LocalName)
 	}
 
 	if repoInfo.Index.Official || endpoint.Version == registry.APIVersion2 {
 		err := s.pushV2Repository(r, localRepo, job.Stdout, repoInfo, tag, sf)
 		if err == nil {
-			s.eventsService.Log("push", repoInfo.LocalName, "")
-			return nil
+			return engine.StatusOK
 		}
 
 		if err != ErrV2RegistryUnavailable {
-			return fmt.Errorf("Error pushing to registry: %s", err)
+			return job.Errorf("Error pushing to registry: %s", err)
 		}
 	}
 
 	if err := s.pushRepository(r, job.Stdout, repoInfo, localRepo, tag, sf); err != nil {
-		return err
+		return job.Error(err)
 	}
-	s.eventsService.Log("push", repoInfo.LocalName, "")
-	return nil
+	return engine.StatusOK
 
 }

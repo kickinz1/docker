@@ -90,7 +90,7 @@ unix://[/path/to/socket] to use.
   Set key=value labels to the daemon (displayed in `docker info`)
 
 **--log-driver**="*json-file*|*syslog*|*none*"
-  Default driver for container logs. Default is `json-file`.
+  Container's logging driver. Default is `default`.
   **Warning**: `docker logs` command works only for `json-file` logging driver.
 
 **--mtu**=VALUE

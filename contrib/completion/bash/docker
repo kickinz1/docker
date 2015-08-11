@@ -22,7 +22,7 @@
 # must have access to the socket for the completions to function correctly
 #
 # Note for developers:
-# Please arrange options sorted alphabetically by long name with the short
+# Please arrange options sorted alphabetically by long name with the short 
 # options immediately following their corresponding long form.
 # This order should be applied to lists, alternatives and code blocks.
 
@@ -220,10 +220,6 @@ _docker_docker() {
 			_filedir -d
 			return
 			;;
-		--log-driver)
-			COMPREPLY=( $( compgen -W "json-file syslog none" -- "$cur" ) )
-			return
-			;;
 		--log-level|-l)
 			COMPREPLY=( $( compgen -W "debug info warn error fatal" -- "$cur" ) )
 			return
@@ -273,13 +269,13 @@ _docker_build() {
 			;;
 		--file|-f)
 			_filedir
-			return
-			;;
+			return	
+			;;	
 	esac
 
 	case "$cur" in
 		-*)
-			COMPREPLY=( $( compgen -W "--cpu-shares -c --cpuset-cpus --file -f --force-rm --help --memory -m --memory-swap --no-cache --pull --quiet -q --rm --tag -t" -- "$cur" ) )
+			COMPREPLY=( $( compgen -W "--file -f --force-rm --help --no-cache --pull --quiet -q --rm --tag -t" -- "$cur" ) )
 			;;
 		*)
 			local counter="$(__docker_pos_first_nonflag '--tag|-t')"
@@ -407,7 +403,7 @@ _docker_events() {
 _docker_exec() {
 	case "$cur" in
 		-*)
-			COMPREPLY=( $( compgen -W "--detach -d --help --interactive -i --privileged -t --tty -u --user" -- "$cur" ) )
+			COMPREPLY=( $( compgen -W "--detach -d --help --interactive -i -t --tty" -- "$cur" ) )
 			;;
 		*)
 			__docker_containers_running
@@ -473,7 +469,7 @@ _docker_images() {
 
 	case "$cur" in
 		-*)
-			COMPREPLY=( $( compgen -W "--all -a --digests --filter -f --help --no-trunc --quiet -q" -- "$cur" ) )
+			COMPREPLY=( $( compgen -W "--all -a --filter -f --help --no-trunc --quiet -q" -- "$cur" ) )
 			;;
 		=)
 			return
@@ -1158,7 +1154,6 @@ _docker() {
 		--insecure-registry
 		--ip
 		--label
-		--log-driver
 		--log-level -l
 		--mtu
 		--pidfile -p

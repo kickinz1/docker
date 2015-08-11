@@ -5,33 +5,36 @@ import (
 	"os"
 	"path"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
+	"github.com/docker/docker/engine"
 )
 
-type ContainerRmConfig struct {
-	ForceRemove, RemoveVolume, RemoveLink bool
-}
+func (daemon *Daemon) ContainerRm(job *engine.Job) engine.Status {
+	if len(job.Args) != 1 {
+		return job.Errorf("Not enough arguments. Usage: %s CONTAINER\n", job.Name)
+	}
+	name := job.Args[0]
+	removeVolume := job.GetenvBool("removeVolume")
+	removeLink := job.GetenvBool("removeLink")
+	forceRemove := job.GetenvBool("forceRemove")
 
-func (daemon *Daemon) ContainerRm(name string, config *ContainerRmConfig) error {
 	container, err := daemon.Get(name)
 	if err != nil {
-		return err
+		return job.Error(err)
 	}
 
-	if config.RemoveLink {
+	if removeLink {
 		name, err := GetFullContainerName(name)
 		if err != nil {
-			return err
-			// TODO: why was just job.Error(err) without return if the function cannot continue w/o container name?
-			//job.Error(err)
+			job.Error(err)
 		}
 		parent, n := path.Split(name)
 		if parent == "/" {
-			return fmt.Errorf("Conflict, cannot remove the default name of the container")
+			return job.Errorf("Conflict, cannot remove the default name of the container")
 		}
 		pe := daemon.ContainerGraph().Get(parent)
 		if pe == nil {
-			return fmt.Errorf("Cannot get parent %s for name %s", parent, name)
+			return job.Errorf("Cannot get parent %s for name %s", parent, name)
 		}
 		parentContainer, _ := daemon.Get(pe.ID())
 
@@ -40,9 +43,9 @@ func (daemon *Daemon) ContainerRm(name string, config *ContainerRmConfig) error 
 		}
 
 		if err := daemon.ContainerGraph().Delete(name); err != nil {
-			return err
+			return job.Error(err)
 		}
-		return nil
+		return engine.StatusOK
 	}
 
 	if container != nil {
@@ -50,36 +53,36 @@ func (daemon *Daemon) ContainerRm(name string, config *ContainerRmConfig) error 
 		// if stats are currently getting collected.
 		daemon.statsCollector.stopCollection(container)
 		if container.IsRunning() {
-			if config.ForceRemove {
+			if forceRemove {
 				if err := container.Kill(); err != nil {
-					return fmt.Errorf("Could not kill running container, cannot remove - %v", err)
+					return job.Errorf("Could not kill running container, cannot remove - %v", err)
 				}
 			} else {
-				return fmt.Errorf("Conflict, You cannot remove a running container. Stop the container before attempting removal or use -f")
+				return job.Errorf("Conflict, You cannot remove a running container. Stop the container before attempting removal or use -f")
 			}
 		}
 
-		if config.ForceRemove {
+		if forceRemove {
 			if err := daemon.ForceRm(container); err != nil {
-				logrus.Errorf("Cannot destroy container %s: %v", name, err)
+				log.Errorf("Cannot destroy container %s: %v", name, err)
 			}
 		} else {
 			if err := daemon.Rm(container); err != nil {
-				return fmt.Errorf("Cannot destroy container %s: %v", name, err)
+				return job.Errorf("Cannot destroy container %s: %v", name, err)
 			}
 		}
 		container.LogEvent("destroy")
-		if config.RemoveVolume {
+		if removeVolume {
 			daemon.DeleteVolumes(container.VolumePaths())
 		}
 	}
-	return nil
+	return engine.StatusOK
 }
 
 func (daemon *Daemon) DeleteVolumes(volumeIDs map[string]struct{}) {
 	for id := range volumeIDs {
 		if err := daemon.volumes.Delete(id); err != nil {
-			logrus.Infof("%s", err)
+			log.Infof("%s", err)
 			continue
 		}
 	}
@@ -134,7 +137,7 @@ func (daemon *Daemon) commonRm(container *Container, forceRemove bool) (err erro
 
 	container.derefVolumes()
 	if _, err := daemon.containerGraph.Purge(container.ID); err != nil {
-		logrus.Debugf("Unable to remove container from link graph: %s", err)
+		log.Debugf("Unable to remove container from link graph: %s", err)
 	}
 
 	if err = daemon.driver.Remove(container.ID); err != nil {

@@ -18,8 +18,10 @@ func TestShutdownEmpty(t *testing.T) {
 
 func TestShutdownAfterRun(t *testing.T) {
 	eng := New()
-	eng.Register("foo", func(job *Job) error {
-		return nil
+	var called bool
+	eng.Register("foo", func(job *Job) Status {
+		called = true
+		return StatusOK
 	})
 	if err := eng.Job("foo").Run(); err != nil {
 		t.Fatal(err)
@@ -40,10 +42,10 @@ func TestShutdownDuringRun(t *testing.T) {
 	)
 	eng := New()
 	var completed bool
-	eng.Register("foo", func(job *Job) error {
+	eng.Register("foo", func(job *Job) Status {
 		time.Sleep(jobDelay)
 		completed = true
-		return nil
+		return StatusOK
 	})
 	go eng.Job("foo").Run()
 	time.Sleep(50 * time.Millisecond)

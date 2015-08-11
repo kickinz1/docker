@@ -8,14 +8,14 @@ import (
 	"github.com/docker/docker/runconfig"
 )
 
-func (daemon *Daemon) ContainerInspect(job *engine.Job) error {
+func (daemon *Daemon) ContainerInspect(job *engine.Job) engine.Status {
 	if len(job.Args) != 1 {
-		return fmt.Errorf("usage: %s NAME", job.Name)
+		return job.Errorf("usage: %s NAME", job.Name)
 	}
 	name := job.Args[0]
 	container, err := daemon.Get(name)
 	if err != nil {
-		return err
+		return job.Error(err)
 	}
 
 	container.Lock()
@@ -26,10 +26,10 @@ func (daemon *Daemon) ContainerInspect(job *engine.Job) error {
 			HostConfig *runconfig.HostConfig
 		}{container, container.hostConfig})
 		if err != nil {
-			return err
+			return job.Error(err)
 		}
 		job.Stdout.Write(b)
-		return nil
+		return engine.StatusOK
 	}
 
 	out := &engine.Env{}
@@ -75,16 +75,25 @@ func (daemon *Daemon) ContainerInspect(job *engine.Job) error {
 
 	container.hostConfig.Links = nil
 	if _, err := out.WriteTo(job.Stdout); err != nil {
-		return err
+		return job.Error(err)
 	}
-	return nil
+	return engine.StatusOK
 }
 
-func (daemon *Daemon) ContainerExecInspect(id string) (*execConfig, error) {
+func (daemon *Daemon) ContainerExecInspect(job *engine.Job) engine.Status {
+	if len(job.Args) != 1 {
+		return job.Errorf("usage: %s ID", job.Name)
+	}
+	id := job.Args[0]
 	eConfig, err := daemon.getExecConfig(id)
 	if err != nil {
-		return nil, err
+		return job.Error(err)
 	}
 
-	return eConfig, nil
+	b, err := json.Marshal(*eConfig)
+	if err != nil {
+		return job.Error(err)
+	}
+	job.Stdout.Write(b)
+	return engine.StatusOK
 }

@@ -7,35 +7,56 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
+	"github.com/docker/docker/engine"
 	"github.com/docker/docker/pkg/jsonlog"
 	"github.com/docker/docker/pkg/promise"
+	"github.com/docker/docker/utils"
 )
 
-func (c *Container) AttachWithLogs(stdin io.ReadCloser, stdout, stderr io.Writer, logs, stream bool) error {
+func (daemon *Daemon) ContainerAttach(job *engine.Job) engine.Status {
+	if len(job.Args) != 1 {
+		return job.Errorf("Usage: %s CONTAINER\n", job.Name)
+	}
+
+	var (
+		name   = job.Args[0]
+		logs   = job.GetenvBool("logs")
+		stream = job.GetenvBool("stream")
+		stdin  = job.GetenvBool("stdin")
+		stdout = job.GetenvBool("stdout")
+		stderr = job.GetenvBool("stderr")
+	)
+
+	container, err := daemon.Get(name)
+	if err != nil {
+		return job.Error(err)
+	}
+
+	//logs
 	if logs {
-		cLog, err := c.ReadLog("json")
+		cLog, err := container.ReadLog("json")
 		if err != nil && os.IsNotExist(err) {
 			// Legacy logs
-			logrus.Debugf("Old logs format")
-			if stdout != nil {
-				cLog, err := c.ReadLog("stdout")
+			log.Debugf("Old logs format")
+			if stdout {
+				cLog, err := container.ReadLog("stdout")
 				if err != nil {
-					logrus.Errorf("Error reading logs (stdout): %s", err)
-				} else if _, err := io.Copy(stdout, cLog); err != nil {
-					logrus.Errorf("Error streaming logs (stdout): %s", err)
+					log.Errorf("Error reading logs (stdout): %s", err)
+				} else if _, err := io.Copy(job.Stdout, cLog); err != nil {
+					log.Errorf("Error streaming logs (stdout): %s", err)
 				}
 			}
-			if stderr != nil {
-				cLog, err := c.ReadLog("stderr")
+			if stderr {
+				cLog, err := container.ReadLog("stderr")
 				if err != nil {
-					logrus.Errorf("Error reading logs (stderr): %s", err)
-				} else if _, err := io.Copy(stderr, cLog); err != nil {
-					logrus.Errorf("Error streaming logs (stderr): %s", err)
+					log.Errorf("Error reading logs (stderr): %s", err)
+				} else if _, err := io.Copy(job.Stderr, cLog); err != nil {
+					log.Errorf("Error streaming logs (stderr): %s", err)
 				}
 			}
 		} else if err != nil {
-			logrus.Errorf("Error reading logs (json): %s", err)
+			log.Errorf("Error reading logs (json): %s", err)
 		} else {
 			dec := json.NewDecoder(cLog)
 			for {
@@ -44,14 +65,14 @@ func (c *Container) AttachWithLogs(stdin io.ReadCloser, stdout, stderr io.Writer
 				if err := dec.Decode(l); err == io.EOF {
 					break
 				} else if err != nil {
-					logrus.Errorf("Error streaming logs: %s", err)
+					log.Errorf("Error streaming logs: %s", err)
 					break
 				}
-				if l.Stream == "stdout" && stdout != nil {
-					io.WriteString(stdout, l.Log)
+				if l.Stream == "stdout" && stdout {
+					io.WriteString(job.Stdout, l.Log)
 				}
-				if l.Stream == "stderr" && stderr != nil {
-					io.WriteString(stderr, l.Log)
+				if l.Stream == "stderr" && stderr {
+					io.WriteString(job.Stderr, l.Log)
 				}
 			}
 		}
@@ -59,31 +80,38 @@ func (c *Container) AttachWithLogs(stdin io.ReadCloser, stdout, stderr io.Writer
 
 	//stream
 	if stream {
-		var stdinPipe io.ReadCloser
-		if stdin != nil {
+		var (
+			cStdin           io.ReadCloser
+			cStdout, cStderr io.Writer
+		)
+
+		if stdin {
 			r, w := io.Pipe()
 			go func() {
 				defer w.Close()
-				defer logrus.Debugf("Closing buffered stdin pipe")
-				io.Copy(w, stdin)
+				defer log.Debugf("Closing buffered stdin pipe")
+				io.Copy(w, job.Stdin)
 			}()
-			stdinPipe = r
+			cStdin = r
 		}
-		<-c.Attach(stdinPipe, stdout, stderr)
+		if stdout {
+			cStdout = job.Stdout
+		}
+		if stderr {
+			cStderr = job.Stderr
+		}
+
+		<-daemon.Attach(&container.StreamConfig, container.Config.OpenStdin, container.Config.StdinOnce, container.Config.Tty, cStdin, cStdout, cStderr)
 		// If we are in stdinonce mode, wait for the process to end
 		// otherwise, simply return
-		if c.Config.StdinOnce && !c.Config.Tty {
-			c.WaitStop(-1 * time.Second)
+		if container.Config.StdinOnce && !container.Config.Tty {
+			container.WaitStop(-1 * time.Second)
 		}
 	}
-	return nil
+	return engine.StatusOK
 }
 
-func (c *Container) Attach(stdin io.ReadCloser, stdout io.Writer, stderr io.Writer) chan error {
-	return attach(&c.StreamConfig, c.Config.OpenStdin, c.Config.StdinOnce, c.Config.Tty, stdin, stdout, stderr)
-}
-
-func attach(streamConfig *StreamConfig, openStdin, stdinOnce, tty bool, stdin io.ReadCloser, stdout io.Writer, stderr io.Writer) chan error {
+func (daemon *Daemon) Attach(streamConfig *StreamConfig, openStdin, stdinOnce, tty bool, stdin io.ReadCloser, stdout io.Writer, stderr io.Writer) chan error {
 	var (
 		cStdout, cStderr io.ReadCloser
 		cStdin           io.WriteCloser
@@ -111,7 +139,7 @@ func attach(streamConfig *StreamConfig, openStdin, stdinOnce, tty bool, stdin io
 		if stdin == nil || !openStdin {
 			return
 		}
-		logrus.Debugf("attach: stdin: begin")
+		log.Debugf("attach: stdin: begin")
 		defer func() {
 			if stdinOnce && !tty {
 				cStdin.Close()
@@ -125,12 +153,12 @@ func attach(streamConfig *StreamConfig, openStdin, stdinOnce, tty bool, stdin io
 				}
 			}
 			wg.Done()
-			logrus.Debugf("attach: stdin: end")
+			log.Debugf("attach: stdin: end")
 		}()
 
 		var err error
 		if tty {
-			_, err = copyEscapable(cStdin, stdin)
+			_, err = utils.CopyEscapable(cStdin, stdin)
 		} else {
 			_, err = io.Copy(cStdin, stdin)
 
@@ -139,7 +167,7 @@ func attach(streamConfig *StreamConfig, openStdin, stdinOnce, tty bool, stdin io
 			err = nil
 		}
 		if err != nil {
-			logrus.Errorf("attach: stdin: %s", err)
+			log.Errorf("attach: stdin: %s", err)
 			errors <- err
 			return
 		}
@@ -156,16 +184,16 @@ func attach(streamConfig *StreamConfig, openStdin, stdinOnce, tty bool, stdin io
 			}
 			streamPipe.Close()
 			wg.Done()
-			logrus.Debugf("attach: %s: end", name)
+			log.Debugf("attach: %s: end", name)
 		}()
 
-		logrus.Debugf("attach: %s: begin", name)
+		log.Debugf("attach: %s: begin", name)
 		_, err := io.Copy(stream, streamPipe)
 		if err == io.ErrClosedPipe {
 			err = nil
 		}
 		if err != nil {
-			logrus.Errorf("attach: %s: %v", name, err)
+			log.Errorf("attach: %s: %v", name, err)
 			errors <- err
 		}
 	}
@@ -183,47 +211,4 @@ func attach(streamConfig *StreamConfig, openStdin, stdinOnce, tty bool, stdin io
 		}
 		return nil
 	})
-}
-
-// Code c/c from io.Copy() modified to handle escape sequence
-func copyEscapable(dst io.Writer, src io.ReadCloser) (written int64, err error) {
-	buf := make([]byte, 32*1024)
-	for {
-		nr, er := src.Read(buf)
-		if nr > 0 {
-			// ---- Docker addition
-			// char 16 is C-p
-			if nr == 1 && buf[0] == 16 {
-				nr, er = src.Read(buf)
-				// char 17 is C-q
-				if nr == 1 && buf[0] == 17 {
-					if err := src.Close(); err != nil {
-						return 0, err
-					}
-					return 0, nil
-				}
-			}
-			// ---- End of docker
-			nw, ew := dst.Write(buf[0:nr])
-			if nw > 0 {
-				written += int64(nw)
-			}
-			if ew != nil {
-				err = ew
-				break
-			}
-			if nr != nw {
-				err = io.ErrShortWrite
-				break
-			}
-		}
-		if er == io.EOF {
-			break
-		}
-		if er != nil {
-			err = er
-			break
-		}
-	}
-	return written, err
 }

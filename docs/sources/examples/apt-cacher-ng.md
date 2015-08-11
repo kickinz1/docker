@@ -35,16 +35,16 @@ Use the following Dockerfile:
 
 To build the image using:
 
-    $ docker build -t eg_apt_cacher_ng .
+    $ sudo docker build -t eg_apt_cacher_ng .
 
 Then run it, mapping the exposed port to one on the host
 
-    $ docker run -d -p 3142:3142 --name test_apt_cacher_ng eg_apt_cacher_ng
+    $ sudo docker run -d -p 3142:3142 --name test_apt_cacher_ng eg_apt_cacher_ng
 
 To see the logfiles that are `tailed` in the default command, you can
 use:
 
-    $ docker logs -f test_apt_cacher_ng
+    $ sudo docker logs -f test_apt_cacher_ng
 
 To get your Debian-based containers to use the proxy, you can do one of
 three things
@@ -68,7 +68,7 @@ a local version of a common base:
 **Option 2** is good for testing, but will break other HTTP clients
 which obey `http_proxy`, such as `curl`, `wget` and others:
 
-    $ docker run --rm -t -i -e http_proxy=http://dockerhost:3142/ debian bash
+    $ sudo docker run --rm -t -i -e http_proxy=http://dockerhost:3142/ debian bash
 
 **Option 3** is the least portable, but there will be times when you
 might need to do it and you can do it from your `Dockerfile`
@@ -78,7 +78,7 @@ Apt-cacher-ng has some tools that allow you to manage the repository,
 and they can be used by leveraging the `VOLUME`
 instruction, and the image we built to run the service:
 
-    $ docker run --rm -t -i --volumes-from test_apt_cacher_ng eg_apt_cacher_ng bash
+    $ sudo docker run --rm -t -i --volumes-from test_apt_cacher_ng eg_apt_cacher_ng bash
 
     $$ /usr/lib/apt-cacher-ng/distkill.pl
     Scanning /var/cache/apt-cacher-ng, please wait...
@@ -102,6 +102,6 @@ instruction, and the image we built to run the service:
 Finally, clean up after your test by stopping and removing the
 container, and then removing the image.
 
-    $ docker stop test_apt_cacher_ng
-    $ docker rm test_apt_cacher_ng
-    $ docker rmi eg_apt_cacher_ng
+    $ sudo docker stop test_apt_cacher_ng
+    $ sudo docker rm test_apt_cacher_ng
+    $ sudo docker rmi eg_apt_cacher_ng

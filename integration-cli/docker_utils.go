@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/docker/docker/api"
-	"github.com/docker/docker/pkg/stringutils"
 )
 
 // Daemon represents a Docker daemon for the testing framework.
@@ -298,19 +297,19 @@ func sockConn(timeout time.Duration) (net.Conn, error) {
 	}
 }
 
-func sockRequest(method, endpoint string, data interface{}) (int, []byte, error) {
+func sockRequest(method, endpoint string, data interface{}) ([]byte, error) {
 	jsonData := bytes.NewBuffer(nil)
 	if err := json.NewEncoder(jsonData).Encode(data); err != nil {
-		return -1, nil, err
+		return nil, err
 	}
 
 	return sockRequestRaw(method, endpoint, jsonData, "application/json")
 }
 
-func sockRequestRaw(method, endpoint string, data io.Reader, ct string) (int, []byte, error) {
+func sockRequestRaw(method, endpoint string, data io.Reader, ct string) ([]byte, error) {
 	c, err := sockConn(time.Duration(10 * time.Second))
 	if err != nil {
-		return -1, nil, fmt.Errorf("could not dial docker daemon: %v", err)
+		return nil, fmt.Errorf("could not dial docker daemon: %v", err)
 	}
 
 	client := httputil.NewClientConn(c, nil)
@@ -318,7 +317,7 @@ func sockRequestRaw(method, endpoint string, data io.Reader, ct string) (int, []
 
 	req, err := http.NewRequest(method, endpoint, data)
 	if err != nil {
-		return -1, nil, fmt.Errorf("could not create new request: %v", err)
+		return nil, fmt.Errorf("could not create new request: %v", err)
 	}
 
 	if ct == "" {
@@ -328,25 +327,28 @@ func sockRequestRaw(method, endpoint string, data io.Reader, ct string) (int, []
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return -1, nil, fmt.Errorf("could not perform request: %v", err)
+		return nil, fmt.Errorf("could not perform request: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := ioutil.ReadAll(resp.Body)
-		return resp.StatusCode, body, fmt.Errorf("received status != 200 OK: %s", resp.Status)
+		return body, fmt.Errorf("received status != 200 OK: %s", resp.Status)
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
-
-	return resp.StatusCode, b, err
+	return ioutil.ReadAll(resp.Body)
 }
 
 func deleteContainer(container string) error {
-	container = strings.TrimSpace(strings.Replace(container, "\n", " ", -1))
-	killArgs := strings.Split(fmt.Sprintf("kill %v", container), " ")
-	runCommand(exec.Command(dockerBinary, killArgs...))
-	rmArgs := strings.Split(fmt.Sprintf("rm -v %v", container), " ")
-	exitCode, err := runCommand(exec.Command(dockerBinary, rmArgs...))
+	container = strings.Replace(container, "\n", " ", -1)
+	container = strings.Trim(container, " ")
+	killArgs := fmt.Sprintf("kill %v", container)
+	killSplitArgs := strings.Split(killArgs, " ")
+	killCmd := exec.Command(dockerBinary, killSplitArgs...)
+	runCommand(killCmd)
+	rmArgs := fmt.Sprintf("rm -v %v", container)
+	rmSplitArgs := strings.Split(rmArgs, " ")
+	rmCmd := exec.Command(dockerBinary, rmSplitArgs...)
+	exitCode, err := runCommand(rmCmd)
 	// set error manually if not set
 	if exitCode != 0 && err == nil {
 		err = fmt.Errorf("failed to remove container: `docker rm` exit is non-zero")
@@ -391,13 +393,11 @@ func getPausedContainers() (string, error) {
 func getSliceOfPausedContainers() ([]string, error) {
 	out, err := getPausedContainers()
 	if err == nil {
-		if len(out) == 0 {
-			return nil, err
-		}
 		slice := strings.Split(strings.TrimSpace(out), "\n")
 		return slice, err
+	} else {
+		return []string{out}, err
 	}
-	return []string{out}, err
 }
 
 func unpauseContainer(container string) error {
@@ -526,7 +526,7 @@ func getContainerCount() (int, error) {
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, containers) {
-			output := strings.TrimSpace(line)
+			output := stripTrailingCharacters(line)
 			output = strings.TrimLeft(output, containers)
 			output = strings.Trim(output, " ")
 			containerCount, err := strconv.Atoi(output)
@@ -696,8 +696,8 @@ func (f *remoteFileServer) Close() error {
 
 func newRemoteFileServer(ctx *FakeContext) (*remoteFileServer, error) {
 	var (
-		image     = fmt.Sprintf("fileserver-img-%s", strings.ToLower(stringutils.GenerateRandomAlphaOnlyString(10)))
-		container = fmt.Sprintf("fileserver-cnt-%s", strings.ToLower(stringutils.GenerateRandomAlphaOnlyString(10)))
+		image     = fmt.Sprintf("fileserver-img-%s", strings.ToLower(makeRandomString(10)))
+		container = fmt.Sprintf("fileserver-cnt-%s", strings.ToLower(makeRandomString(10)))
 	)
 
 	// Build the image
@@ -1043,9 +1043,9 @@ func daemonTime(t *testing.T) time.Time {
 		return time.Now()
 	}
 
-	_, body, err := sockRequest("GET", "/info", nil)
+	body, err := sockRequest("GET", "/info", nil)
 	if err != nil {
-		t.Fatalf("daemonTime: failed to get /info: %v", err)
+		t.Fatal("daemonTime: failed to get /info: %v", err)
 	}
 
 	type infoJSON struct {

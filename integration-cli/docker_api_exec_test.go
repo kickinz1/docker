@@ -18,7 +18,7 @@ func TestExecApiCreateNoCmd(t *testing.T) {
 		t.Fatal(out, err)
 	}
 
-	_, body, err := sockRequest("POST", fmt.Sprintf("/containers/%s/exec", name), map[string]interface{}{"Cmd": nil})
+	body, err := sockRequest("POST", fmt.Sprintf("/containers/%s/exec", name), map[string]interface{}{"Cmd": nil})
 	if err == nil || !bytes.Contains(body, []byte("No exec command specified")) {
 		t.Fatalf("Expected error when creating exec command with no Cmd specified: %q", err)
 	}

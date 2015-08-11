@@ -90,10 +90,7 @@ func (v *Volume) initialize() error {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 
-	if _, err := os.Stat(v.Path); err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
+	if _, err := os.Stat(v.Path); err != nil && os.IsNotExist(err) {
 		if err := os.MkdirAll(v.Path, 0755); err != nil {
 			return err
 		}
@@ -102,6 +99,15 @@ func (v *Volume) initialize() error {
 	if err := os.MkdirAll(v.configPath, 0755); err != nil {
 		return err
 	}
+	jsonPath, err := v.jsonPath()
+	if err != nil {
+		return err
+	}
+	f, err := os.Create(jsonPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
 
 	return v.toDisk()
 }

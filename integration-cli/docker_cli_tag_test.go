@@ -1,11 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 	"testing"
-
-	"github.com/docker/docker/pkg/stringutils"
 )
 
 // tagging a named image in a new unprefixed repo should work
@@ -32,7 +31,7 @@ func TestTagUnprefixedRepoByID(t *testing.T) {
 		t.Fatalf("failed to get the image ID of busybox: %s, %v", out, err)
 	}
 
-	cleanedImageID := strings.TrimSpace(out)
+	cleanedImageID := stripTrailingCharacters(out)
 	tagCmd := exec.Command(dockerBinary, "tag", cleanedImageID, "testfoobarbaz")
 	if out, _, err = runCommandWithOutput(tagCmd); err != nil {
 		t.Fatal(out, err)
@@ -60,9 +59,9 @@ func TestTagInvalidUnprefixedRepo(t *testing.T) {
 
 // ensure we don't allow the use of invalid tags; these tag operations should fail
 func TestTagInvalidPrefixedRepo(t *testing.T) {
-	longTag := stringutils.GenerateRandomAlphaOnlyString(121)
+	long_tag := makeRandomString(121)
 
-	invalidTags := []string{"repo:fo$z$", "repo:Foo@3cc", "repo:Foo$3", "repo:Foo*3", "repo:Fo^3", "repo:Foo!3", "repo:%goodbye", "repo:#hashtagit", "repo:F)xcz(", "repo:-foo", "repo:..", longTag}
+	invalidTags := []string{"repo:fo$z$", "repo:Foo@3cc", "repo:Foo$3", "repo:Foo*3", "repo:Fo^3", "repo:Foo!3", "repo:%goodbye", "repo:#hashtagit", "repo:F)xcz(", "repo:-foo", "repo:..", long_tag}
 
 	for _, repotag := range invalidTags {
 		tagCmd := exec.Command(dockerBinary, "tag", "busybox", repotag)
@@ -90,8 +89,9 @@ func TestTagValidPrefixedRepo(t *testing.T) {
 			continue
 		}
 		deleteImages(repo)
+		logMessage := fmt.Sprintf("tag - busybox %v", repo)
+		logDone(logMessage)
 	}
-	logDone("tag - tag valid prefixed repo")
 }
 
 // tag an image with an existed tag name without -f option should fail
@@ -160,6 +160,9 @@ func TestTagOfficialNames(t *testing.T) {
 		} else if strings.Contains(out, name) {
 			t.Errorf("images should not have listed '%s'", name)
 			deleteImages(name + ":latest")
+		} else {
+			logMessage := fmt.Sprintf("tag official name - busybox %v", name)
+			logDone(logMessage)
 		}
 	}
 
@@ -171,6 +174,7 @@ func TestTagOfficialNames(t *testing.T) {
 			continue
 		}
 		deleteImages("fooo/bar:latest")
+		logMessage := fmt.Sprintf("tag official name - %v fooo/bar", name)
+		logDone(logMessage)
 	}
-	logDone("tag - tag official names")
 }

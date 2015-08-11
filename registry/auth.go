@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Sirupsen/logrus"
-	"github.com/docker/docker/pkg/requestdecorator"
+	log "github.com/Sirupsen/logrus"
+	"github.com/docker/docker/utils"
 )
 
 const (
@@ -66,7 +66,7 @@ func (auth *RequestAuthorization) getToken() (string, error) {
 	defer auth.tokenLock.Unlock()
 	now := time.Now()
 	if now.Before(auth.tokenExpiration) {
-		logrus.Debugf("Using cached token for %s", auth.authConfig.Username)
+		log.Debugf("Using cached token for %s", auth.authConfig.Username)
 		return auth.tokenCache, nil
 	}
 
@@ -78,7 +78,7 @@ func (auth *RequestAuthorization) getToken() (string, error) {
 		case "basic":
 			// no token necessary
 		case "bearer":
-			logrus.Debugf("Getting bearer token with %s for %s", challenge.Parameters, auth.authConfig.Username)
+			log.Debugf("Getting bearer token with %s for %s", challenge.Parameters, auth.authConfig.Username)
 			params := map[string]string{}
 			for k, v := range challenge.Parameters {
 				params[k] = v
@@ -93,7 +93,7 @@ func (auth *RequestAuthorization) getToken() (string, error) {
 
 			return token, nil
 		default:
-			logrus.Infof("Unsupported auth scheme: %q", challenge.Scheme)
+			log.Infof("Unsupported auth scheme: %q", challenge.Scheme)
 		}
 	}
 
@@ -225,16 +225,17 @@ func SaveConfig(configFile *ConfigFile) error {
 }
 
 // Login tries to register/login to the registry server.
-func Login(authConfig *AuthConfig, registryEndpoint *Endpoint, factory *requestdecorator.RequestFactory) (string, error) {
+func Login(authConfig *AuthConfig, registryEndpoint *Endpoint, factory *utils.HTTPRequestFactory) (string, error) {
 	// Separates the v2 registry login logic from the v1 logic.
 	if registryEndpoint.Version == APIVersion2 {
 		return loginV2(authConfig, registryEndpoint, factory)
 	}
+
 	return loginV1(authConfig, registryEndpoint, factory)
 }
 
 // loginV1 tries to register/login to the v1 registry server.
-func loginV1(authConfig *AuthConfig, registryEndpoint *Endpoint, factory *requestdecorator.RequestFactory) (string, error) {
+func loginV1(authConfig *AuthConfig, registryEndpoint *Endpoint, factory *utils.HTTPRequestFactory) (string, error) {
 	var (
 		status        string
 		reqBody       []byte
@@ -244,7 +245,7 @@ func loginV1(authConfig *AuthConfig, registryEndpoint *Endpoint, factory *reques
 		serverAddress = authConfig.ServerAddress
 	)
 
-	logrus.Debugf("attempting v1 login to registry endpoint %s", registryEndpoint)
+	log.Debugf("attempting v1 login to registry endpoint %s", registryEndpoint)
 
 	if serverAddress == "" {
 		return "", fmt.Errorf("Server Error: Server Address not set.")
@@ -347,8 +348,8 @@ func loginV1(authConfig *AuthConfig, registryEndpoint *Endpoint, factory *reques
 // now, users should create their account through other means like directly from a web page
 // served by the v2 registry service provider. Whether this will be supported in the future
 // is to be determined.
-func loginV2(authConfig *AuthConfig, registryEndpoint *Endpoint, factory *requestdecorator.RequestFactory) (string, error) {
-	logrus.Debugf("attempting v2 login to registry endpoint %s", registryEndpoint)
+func loginV2(authConfig *AuthConfig, registryEndpoint *Endpoint, factory *utils.HTTPRequestFactory) (string, error) {
+	log.Debugf("attempting v2 login to registry endpoint %s", registryEndpoint)
 	var (
 		err       error
 		allErrors []error
@@ -356,7 +357,7 @@ func loginV2(authConfig *AuthConfig, registryEndpoint *Endpoint, factory *reques
 	)
 
 	for _, challenge := range registryEndpoint.AuthChallenges {
-		logrus.Debugf("trying %q auth challenge with params %s", challenge.Scheme, challenge.Parameters)
+		log.Debugf("trying %q auth challenge with params %s", challenge.Scheme, challenge.Parameters)
 
 		switch strings.ToLower(challenge.Scheme) {
 		case "basic":
@@ -372,7 +373,7 @@ func loginV2(authConfig *AuthConfig, registryEndpoint *Endpoint, factory *reques
 			return "Login Succeeded", nil
 		}
 
-		logrus.Debugf("error trying auth challenge %q: %s", challenge.Scheme, err)
+		log.Debugf("error trying auth challenge %q: %s", challenge.Scheme, err)
 
 		allErrors = append(allErrors, err)
 	}
@@ -380,7 +381,7 @@ func loginV2(authConfig *AuthConfig, registryEndpoint *Endpoint, factory *reques
 	return "", fmt.Errorf("no successful auth challenge for %s - errors: %s", registryEndpoint, allErrors)
 }
 
-func tryV2BasicAuthLogin(authConfig *AuthConfig, params map[string]string, registryEndpoint *Endpoint, client *http.Client, factory *requestdecorator.RequestFactory) error {
+func tryV2BasicAuthLogin(authConfig *AuthConfig, params map[string]string, registryEndpoint *Endpoint, client *http.Client, factory *utils.HTTPRequestFactory) error {
 	req, err := factory.NewRequest("GET", registryEndpoint.Path(""), nil)
 	if err != nil {
 		return err
@@ -401,7 +402,7 @@ func tryV2BasicAuthLogin(authConfig *AuthConfig, params map[string]string, regis
 	return nil
 }
 
-func tryV2TokenAuthLogin(authConfig *AuthConfig, params map[string]string, registryEndpoint *Endpoint, client *http.Client, factory *requestdecorator.RequestFactory) error {
+func tryV2TokenAuthLogin(authConfig *AuthConfig, params map[string]string, registryEndpoint *Endpoint, client *http.Client, factory *utils.HTTPRequestFactory) error {
 	token, err := getToken(authConfig.Username, authConfig.Password, params, registryEndpoint, client, factory)
 	if err != nil {
 		return err

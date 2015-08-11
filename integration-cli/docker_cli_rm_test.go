@@ -1,7 +1,6 @@
 package main
 
 import (
-	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -65,15 +64,16 @@ func TestRmRunningContainerCheckError409(t *testing.T) {
 	createRunningContainer(t, "foo")
 
 	endpoint := "/containers/foo"
-	status, _, err := sockRequest("DELETE", endpoint, nil)
+	_, err := sockRequest("DELETE", endpoint, nil)
 
 	if err == nil {
 		t.Fatalf("Expected error, can't rm a running container")
-	} else if status != http.StatusConflict {
+	}
+	if !strings.Contains(err.Error(), "409 Conflict") {
 		t.Fatalf("Expected error to contain '409 Conflict' but found %s", err)
 	}
 
-	logDone("rm - running container with Error 409")
+	logDone("rm - running container")
 }
 
 func TestRmForceRemoveRunningContainer(t *testing.T) {

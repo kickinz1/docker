@@ -6,12 +6,8 @@ import (
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/nat"
 	"github.com/docker/docker/pkg/ulimit"
+	"github.com/docker/docker/utils"
 )
-
-type KeyValuePair struct {
-	Key   string
-	Value string
-}
 
 type NetworkMode string
 
@@ -111,7 +107,7 @@ type LogConfig struct {
 type HostConfig struct {
 	Binds           []string
 	ContainerIDFile string
-	LxcConf         []KeyValuePair
+	LxcConf         []utils.KeyValuePair
 	Memory          int64  // Memory limit (in bytes)
 	MemorySwap      int64  // Total memory usage (memory + swap); set `-1` to disable swap
 	CpuShares       int64  // CPU shares (relative weight vs. other containers)

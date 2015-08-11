@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/pkg/ioutils"
+	"github.com/docker/docker/utils"
 )
 
 type Env []string
@@ -189,10 +189,7 @@ func (decoder *Decoder) Decode() (*Env, error) {
 // is returned.
 func (env *Env) Decode(src io.Reader) error {
 	m := make(map[string]interface{})
-	d := json.NewDecoder(src)
-	// We need this or we'll lose data when we decode int64 in json
-	d.UseNumber()
-	if err := d.Decode(&m); err != nil {
+	if err := json.NewDecoder(src).Decode(&m); err != nil {
 		return err
 	}
 	for k, v := range m {
@@ -210,7 +207,7 @@ func (env *Env) SetAuto(k string, v interface{}) {
 
 	// FIXME: we fix-convert float values to int, because
 	// encoding/json decodes integers to float64, but cannot encode them back.
-	// (See https://golang.org/src/pkg/encoding/json/decode.go#L46)
+	// (See http://golang.org/src/pkg/encoding/json/decode.go#L46)
 	if fval, ok := v.(float64); ok {
 		env.SetInt64(k, int64(fval))
 	} else if sval, ok := v.(string); ok {
@@ -245,7 +242,7 @@ func (env *Env) Encode(dst io.Writer) error {
 		if err := json.Unmarshal([]byte(v), &val); err == nil {
 			// FIXME: we fix-convert float values to int, because
 			// encoding/json decodes integers to float64, but cannot encode them back.
-			// (See https://golang.org/src/pkg/encoding/json/decode.go#L46)
+			// (See http://golang.org/src/pkg/encoding/json/decode.go#L46)
 			m[k] = changeFloats(val)
 		} else {
 			m[k] = v
@@ -258,7 +255,7 @@ func (env *Env) Encode(dst io.Writer) error {
 }
 
 func (env *Env) WriteTo(dst io.Writer) (int64, error) {
-	wc := ioutils.NewWriteCounter(dst)
+	wc := utils.NewWriteCounter(dst)
 	err := env.Encode(wc)
 	return wc.Count, err
 }

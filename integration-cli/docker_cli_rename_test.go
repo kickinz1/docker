@@ -15,7 +15,7 @@ func TestRenameStoppedContainer(t *testing.T) {
 		t.Fatalf(out, err)
 	}
 
-	cleanedContainerID := strings.TrimSpace(out)
+	cleanedContainerID := stripTrailingCharacters(out)
 
 	runCmd = exec.Command(dockerBinary, "wait", cleanedContainerID)
 	out, _, err = runCommandWithOutput(runCmd)
@@ -51,7 +51,7 @@ func TestRenameRunningContainer(t *testing.T) {
 		t.Fatalf(out, err)
 	}
 
-	cleanedContainerID := strings.TrimSpace(out)
+	cleanedContainerID := stripTrailingCharacters(out)
 	runCmd = exec.Command(dockerBinary, "rename", "first_name", "new_name")
 	out, _, err = runCommandWithOutput(runCmd)
 	if err != nil {
@@ -97,7 +97,7 @@ func TestRenameCheckNames(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	logDone("rename - old name released")
+	logDone("rename - running container")
 }
 
 func TestRenameInvalidName(t *testing.T) {

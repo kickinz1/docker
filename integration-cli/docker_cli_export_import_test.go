@@ -15,7 +15,7 @@ func TestExportContainerAndImportImage(t *testing.T) {
 		t.Fatal("failed to create a container", out, err)
 	}
 
-	cleanedContainerID := strings.TrimSpace(out)
+	cleanedContainerID := stripTrailingCharacters(out)
 
 	inspectCmd := exec.Command(dockerBinary, "inspect", cleanedContainerID)
 	out, _, err = runCommandWithOutput(inspectCmd)
@@ -35,7 +35,7 @@ func TestExportContainerAndImportImage(t *testing.T) {
 		t.Fatalf("failed to import image: %s, %v", out, err)
 	}
 
-	cleanedImageID := strings.TrimSpace(out)
+	cleanedImageID := stripTrailingCharacters(out)
 
 	inspectCmd = exec.Command(dockerBinary, "inspect", cleanedImageID)
 	if out, _, err = runCommandWithOutput(inspectCmd); err != nil {
@@ -45,7 +45,8 @@ func TestExportContainerAndImportImage(t *testing.T) {
 	deleteContainer(cleanedContainerID)
 	deleteImages("repo/testexp:v1")
 
-	logDone("export - export/import a container/image")
+	logDone("export - export a container")
+	logDone("import - import an image")
 }
 
 // Used to test output flag in the export command
@@ -56,7 +57,7 @@ func TestExportContainerWithOutputAndImportImage(t *testing.T) {
 		t.Fatal("failed to create a container", out, err)
 	}
 
-	cleanedContainerID := strings.TrimSpace(out)
+	cleanedContainerID := stripTrailingCharacters(out)
 
 	inspectCmd := exec.Command(dockerBinary, "inspect", cleanedContainerID)
 	out, _, err = runCommandWithOutput(inspectCmd)
@@ -81,7 +82,7 @@ func TestExportContainerWithOutputAndImportImage(t *testing.T) {
 		t.Fatalf("failed to import image: %s, %v", out, err)
 	}
 
-	cleanedImageID := strings.TrimSpace(out)
+	cleanedImageID := stripTrailingCharacters(out)
 
 	inspectCmd = exec.Command(dockerBinary, "inspect", cleanedImageID)
 	if out, _, err = runCommandWithOutput(inspectCmd); err != nil {
@@ -93,5 +94,6 @@ func TestExportContainerWithOutputAndImportImage(t *testing.T) {
 
 	os.Remove("/tmp/testexp.tar")
 
-	logDone("export - export/import a container/image with output flag")
+	logDone("export - export a container with output flag")
+	logDone("import - import an image with output flag")
 }

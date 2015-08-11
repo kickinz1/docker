@@ -3,64 +3,52 @@ package daemon
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/runconfig"
 )
 
-type ContainerCommitConfig struct {
-	Pause   bool
-	Repo    string
-	Tag     string
-	Author  string
-	Comment string
-	Changes []string
-	Config  io.ReadCloser
-}
+func (daemon *Daemon) ContainerCommit(job *engine.Job) engine.Status {
+	if len(job.Args) != 1 {
+		return job.Errorf("Not enough arguments. Usage: %s CONTAINER\n", job.Name)
+	}
+	name := job.Args[0]
 
-func (daemon *Daemon) ContainerCommit(name string, c *ContainerCommitConfig) (string, error) {
 	container, err := daemon.Get(name)
 	if err != nil {
-		return "", err
+		return job.Error(err)
 	}
 
 	var (
-		subenv       engine.Env
 		config       = container.Config
 		stdoutBuffer = bytes.NewBuffer(nil)
 		newConfig    runconfig.Config
 	)
 
-	if err := subenv.Decode(c.Config); err != nil {
-		logrus.Errorf("%s", err)
-	}
-
 	buildConfigJob := daemon.eng.Job("build_config")
 	buildConfigJob.Stdout.Add(stdoutBuffer)
-	buildConfigJob.SetenvList("changes", c.Changes)
+	buildConfigJob.Setenv("changes", job.Getenv("changes"))
 	// FIXME this should be remove when we remove deprecated config param
-	buildConfigJob.SetenvSubEnv("config", &subenv)
+	buildConfigJob.Setenv("config", job.Getenv("config"))
 
 	if err := buildConfigJob.Run(); err != nil {
-		return "", err
+		return job.Error(err)
 	}
 	if err := json.NewDecoder(stdoutBuffer).Decode(&newConfig); err != nil {
-		return "", err
+		return job.Error(err)
 	}
 
 	if err := runconfig.Merge(&newConfig, config); err != nil {
-		return "", err
+		return job.Error(err)
 	}
 
-	img, err := daemon.Commit(container, c.Repo, c.Tag, c.Comment, c.Author, c.Pause, &newConfig)
+	img, err := daemon.Commit(container, job.Getenv("repo"), job.Getenv("tag"), job.Getenv("comment"), job.Getenv("author"), job.GetenvBool("pause"), &newConfig)
 	if err != nil {
-		return "", err
+		return job.Error(err)
 	}
-
-	return img.ID, nil
+	job.Printf("%s\n", img.ID)
+	return engine.StatusOK
 }
 
 // Commit creates a new filesystem image from the current state of a container.

@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/pkg/ulimit"
 	"github.com/docker/docker/pkg/units"
+	"github.com/docker/docker/utils"
 )
 
 var (
@@ -95,7 +96,7 @@ func Parse(cmd *flag.FlagSet, args []string) (*Config, *HostConfig, *flag.FlagSe
 
 	cmd.Require(flag.Min, 1)
 
-	if err := cmd.ParseFlags(args, true); err != nil {
+	if err := utils.ParseFlags(cmd, args, true); err != nil {
 		return nil, nil, cmd, err
 	}
 
@@ -124,7 +125,7 @@ func Parse(cmd *flag.FlagSet, args []string) (*Config, *HostConfig, *flag.FlagSe
 		return nil, nil, cmd, ErrConflictHostNetworkAndLinks
 	}
 
-	if strings.HasPrefix(*flNetMode, "container") && flLinks.Len() > 0 {
+	if *flNetMode == "container" && flLinks.Len() > 0 {
 		return nil, nil, cmd, ErrConflictContainerNetworkAndLinks
 	}
 
@@ -132,7 +133,7 @@ func Parse(cmd *flag.FlagSet, args []string) (*Config, *HostConfig, *flag.FlagSe
 		return nil, nil, cmd, ErrConflictHostNetworkAndDns
 	}
 
-	if strings.HasPrefix(*flNetMode, "container") && flDns.Len() > 0 {
+	if *flNetMode == "container" && flDns.Len() > 0 {
 		return nil, nil, cmd, ErrConflictContainerNetworkAndDns
 	}
 
@@ -429,14 +430,14 @@ func parseDriverOpts(opts opts.ListOpts) (map[string][]string, error) {
 	return out, nil
 }
 
-func parseKeyValueOpts(opts opts.ListOpts) ([]KeyValuePair, error) {
-	out := make([]KeyValuePair, opts.Len())
+func parseKeyValueOpts(opts opts.ListOpts) ([]utils.KeyValuePair, error) {
+	out := make([]utils.KeyValuePair, opts.Len())
 	for i, o := range opts.GetAll() {
 		k, v, err := parsers.ParseKeyValueOpt(o)
 		if err != nil {
 			return nil, err
 		}
-		out[i] = KeyValuePair{Key: k, Value: v}
+		out[i] = utils.KeyValuePair{Key: k, Value: v}
 	}
 	return out, nil
 }

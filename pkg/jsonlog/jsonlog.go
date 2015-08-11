@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 )
 
 type JSONLog struct {
@@ -39,7 +39,7 @@ func WriteLog(src io.Reader, dst io.Writer, format string) error {
 		if err := dec.Decode(l); err == io.EOF {
 			return nil
 		} else if err != nil {
-			logrus.Printf("Error streaming logs: %s", err)
+			log.Printf("Error streaming logs: %s", err)
 			return err
 		}
 		line, err := l.Format(format)

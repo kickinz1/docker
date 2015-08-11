@@ -18,9 +18,8 @@ const (
 )
 
 var (
-	baseTimestamp          time.Time
-	isTerminal             bool
-	defaultTimestampFormat = time.RFC3339
+	baseTimestamp time.Time
+	isTerminal    bool
 )
 
 func init() {
@@ -47,9 +46,6 @@ type TextFormatter struct {
 	// the time passed since beginning of execution.
 	FullTimestamp bool
 
-	// Timestamp format to use for display, if a full timestamp is printed
-	TimestampFormat string
-
 	// The fields are sorted by default for a consistent output. For applications
 	// that log extremely frequently and don't use the JSON formatter this may not
 	// be desired.
@@ -72,14 +68,11 @@ func (f *TextFormatter) Format(entry *Entry) ([]byte, error) {
 
 	isColored := (f.ForceColors || isTerminal) && !f.DisableColors
 
-	if f.TimestampFormat == "" {
-		f.TimestampFormat = defaultTimestampFormat
-	}
 	if isColored {
 		f.printColored(b, entry, keys)
 	} else {
 		if !f.DisableTimestamp {
-			f.appendKeyValue(b, "time", entry.Time.Format(f.TimestampFormat))
+			f.appendKeyValue(b, "time", entry.Time.Format(time.RFC3339))
 		}
 		f.appendKeyValue(b, "level", entry.Level.String())
 		f.appendKeyValue(b, "msg", entry.Message)
@@ -110,7 +103,7 @@ func (f *TextFormatter) printColored(b *bytes.Buffer, entry *Entry, keys []strin
 	if !f.FullTimestamp {
 		fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%04d] %-44s ", levelColor, levelText, miniTS(), entry.Message)
 	} else {
-		fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s] %-44s ", levelColor, levelText, entry.Time.Format(f.TimestampFormat), entry.Message)
+		fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s] %-44s ", levelColor, levelText, entry.Time.Format(time.RFC3339), entry.Message)
 	}
 	for _, k := range keys {
 		v := entry.Data[k]

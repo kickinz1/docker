@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,7 +17,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/pkg/stringutils"
 	"github.com/docker/docker/vendor/src/code.google.com/p/go/src/pkg/archive/tar"
 )
 
@@ -44,14 +44,12 @@ func processExitCode(err error) (exitCode int) {
 
 func IsKilled(err error) bool {
 	if exitErr, ok := err.(*exec.ExitError); ok {
-		status, ok := exitErr.Sys().(syscall.WaitStatus)
+		sys := exitErr.ProcessState.Sys()
+		status, ok := sys.(syscall.WaitStatus)
 		if !ok {
 			return false
 		}
-		// status.ExitStatus() is required on Windows because it does not
-		// implement Signal() nor Signaled(). Just check it had a bad exit
-		// status could mean it was killed (and in tests we do kill)
-		return (status.Signaled() && status.Signal() == os.Kill) || status.ExitStatus() != 0
+		return status.Signaled() && status.Signal() == os.Kill
 	}
 	return false
 }
@@ -168,7 +166,11 @@ func runCommandPipelineWithOutput(cmds ...*exec.Cmd) (output string, exitCode in
 }
 
 func logDone(message string) {
-	fmt.Printf("[PASSED]: %.69s\n", message)
+	fmt.Printf("[PASSED]: %s\n", message)
+}
+
+func stripTrailingCharacters(target string) string {
+	return strings.TrimSpace(target)
 }
 
 func unmarshalJSON(data []byte, result interface{}) error {
@@ -213,16 +215,7 @@ func waitInspect(name, expr, expected string, timeout int) error {
 		cmd := exec.Command(dockerBinary, "inspect", "-f", expr, name)
 		out, _, err := runCommandWithOutput(cmd)
 		if err != nil {
-			if !strings.Contains(out, "No such") {
-				return fmt.Errorf("error executing docker inspect: %v\n%s", err, out)
-			}
-			select {
-			case <-after:
-				return err
-			default:
-				time.Sleep(10 * time.Millisecond)
-				continue
-			}
+			return fmt.Errorf("error executing docker inspect: %v", err)
 		}
 
 		out = strings.TrimSpace(out)
@@ -308,10 +301,21 @@ func copyWithCP(source, target string) error {
 	return nil
 }
 
+func makeRandomString(n int) string {
+	// make a really long string
+	letters := []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]byte, n)
+	r := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
+	for i := range b {
+		b[i] = letters[r.Intn(len(letters))]
+	}
+	return string(b)
+}
+
 // randomUnixTmpDirPath provides a temporary unix path with rand string appended.
 // does not create or checks if it exists.
 func randomUnixTmpDirPath(s string) string {
-	return path.Join("/tmp", fmt.Sprintf("%s.%s", s, stringutils.GenerateRandomAlphaOnlyString(10)))
+	return path.Join("/tmp", fmt.Sprintf("%s.%s", s, makeRandomString(10)))
 }
 
 // Reads chunkSize bytes from reader after every interval.

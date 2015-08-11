@@ -14,7 +14,7 @@ import (
 )
 
 // newRouteRegexp parses a route template and returns a routeRegexp,
-// used to match a host, a path or a query string.
+// used to match a host or path.
 //
 // It will extract named variables, assemble a regexp to be matched, create
 // a "reverse" template to build URLs and compile regexps to validate variable
@@ -23,7 +23,7 @@ import (
 // Previously we accepted only Python-like identifiers for variable
 // names ([a-zA-Z_][a-zA-Z0-9_]*), but currently the only restriction is that
 // name and pattern can't be empty, and names can't contain a colon.
-func newRouteRegexp(tpl string, matchHost, matchPrefix, matchQuery, strictSlash bool) (*routeRegexp, error) {
+func newRouteRegexp(tpl string, matchHost, matchPrefix, strictSlash bool) (*routeRegexp, error) {
 	// Check if it is well-formed.
 	idxs, errBraces := braceIndices(tpl)
 	if errBraces != nil {
@@ -33,15 +33,11 @@ func newRouteRegexp(tpl string, matchHost, matchPrefix, matchQuery, strictSlash 
 	template := tpl
 	// Now let's parse it.
 	defaultPattern := "[^/]+"
-	if matchQuery {
-		defaultPattern = "[^?&]+"
-		matchPrefix = true
-	} else if matchHost {
+	if matchHost {
 		defaultPattern = "[^.]+"
-		matchPrefix = false
+		matchPrefix, strictSlash = false, false
 	}
-	// Only match strict slash if not matching
-	if matchPrefix || matchHost || matchQuery {
+	if matchPrefix {
 		strictSlash = false
 	}
 	// Set a flag for strictSlash.
@@ -52,10 +48,7 @@ func newRouteRegexp(tpl string, matchHost, matchPrefix, matchQuery, strictSlash 
 	}
 	varsN := make([]string, len(idxs)/2)
 	varsR := make([]*regexp.Regexp, len(idxs)/2)
-	pattern := bytes.NewBufferString("")
-	if !matchQuery {
-		pattern.WriteByte('^')
-	}
+	pattern := bytes.NewBufferString("^")
 	reverse := bytes.NewBufferString("")
 	var end int
 	var err error
@@ -107,7 +100,6 @@ func newRouteRegexp(tpl string, matchHost, matchPrefix, matchQuery, strictSlash 
 	return &routeRegexp{
 		template:    template,
 		matchHost:   matchHost,
-		matchQuery:  matchQuery,
 		strictSlash: strictSlash,
 		regexp:      reg,
 		reverse:     reverse.String(),
@@ -121,10 +113,8 @@ func newRouteRegexp(tpl string, matchHost, matchPrefix, matchQuery, strictSlash 
 type routeRegexp struct {
 	// The unmodified template.
 	template string
-	// True for host match, false for path or query string match.
+	// True for host match, false for path match.
 	matchHost bool
-	// True for query string match, false for path and host match.
-	matchQuery bool
 	// The strictSlash value defined on the route, but disabled if PathPrefix was used.
 	strictSlash bool
 	// Expanded regexp.
@@ -140,11 +130,7 @@ type routeRegexp struct {
 // Match matches the regexp against the URL host or path.
 func (r *routeRegexp) Match(req *http.Request, match *RouteMatch) bool {
 	if !r.matchHost {
-		if r.matchQuery {
-			return r.regexp.MatchString(req.URL.RawQuery)
-		} else {
-			return r.regexp.MatchString(req.URL.Path)
-		}
+		return r.regexp.MatchString(req.URL.Path)
 	}
 	return r.regexp.MatchString(getHost(req))
 }
@@ -210,9 +196,8 @@ func braceIndices(s string) ([]int, error) {
 
 // routeRegexpGroup groups the route matchers that carry variables.
 type routeRegexpGroup struct {
-	host    *routeRegexp
-	path    *routeRegexp
-	queries []*routeRegexp
+	host *routeRegexp
+	path *routeRegexp
 }
 
 // setMatch extracts the variables from the URL once a route matches.
@@ -249,28 +234,17 @@ func (v *routeRegexpGroup) setMatch(req *http.Request, m *RouteMatch, r *Route) 
 			}
 		}
 	}
-	// Store query string variables.
-	rawQuery := req.URL.RawQuery
-	for _, q := range v.queries {
-		queryVars := q.regexp.FindStringSubmatch(rawQuery)
-		if queryVars != nil {
-			for k, v := range q.varsN {
-				m.Vars[v] = queryVars[k+1]
-			}
-		}
-	}
 }
 
 // getHost tries its best to return the request host.
 func getHost(r *http.Request) string {
-	if r.URL.IsAbs() {
-		return r.URL.Host
+	if !r.URL.IsAbs() {
+		host := r.Host
+		// Slice off any port information.
+		if i := strings.Index(host, ":"); i != -1 {
+			host = host[:i]
+		}
+		return host
 	}
-	host := r.Host
-	// Slice off any port information.
-	if i := strings.Index(host, ":"); i != -1 {
-		host = host[:i]
-	}
-	return host
-
+	return r.URL.Host
 }

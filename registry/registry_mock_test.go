@@ -18,7 +18,7 @@ import (
 	"github.com/docker/docker/opts"
 	"github.com/gorilla/mux"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 )
 
 var (
@@ -134,7 +134,7 @@ func init() {
 
 func handlerAccessLog(handler http.Handler) http.Handler {
 	logHandler := func(w http.ResponseWriter, r *http.Request) {
-		logrus.Debugf("%s \"%s %s\"", r.RemoteAddr, r.Method, r.URL)
+		log.Debugf("%s \"%s %s\"", r.RemoteAddr, r.Method, r.URL)
 		handler.ServeHTTP(w, r)
 	}
 	return http.HandlerFunc(logHandler)
@@ -171,7 +171,7 @@ func makePublicIndex() *IndexInfo {
 	return index
 }
 
-func makeServiceConfig(mirrors []string, insecureRegistries []string) *ServiceConfig {
+func makeServiceConfig(mirrors []string, insecure_registries []string) *ServiceConfig {
 	options := &Options{
 		Mirrors:            opts.NewListOpts(nil),
 		InsecureRegistries: opts.NewListOpts(nil),
@@ -181,9 +181,9 @@ func makeServiceConfig(mirrors []string, insecureRegistries []string) *ServiceCo
 			options.Mirrors.Set(mirror)
 		}
 	}
-	if insecureRegistries != nil {
-		for _, insecureRegistries := range insecureRegistries {
-			options.InsecureRegistries.Set(insecureRegistries)
+	if insecure_registries != nil {
+		for _, insecure_registries := range insecure_registries {
+			options.InsecureRegistries.Set(insecure_registries)
 		}
 	}
 
@@ -467,7 +467,7 @@ func TestPing(t *testing.T) {
  * WARNING: Don't push on the repos uncommented, it'll block the tests
  *
 func TestWait(t *testing.T) {
-	logrus.Println("Test HTTP server ready and waiting:", testHttpServer.URL)
+	log.Println("Test HTTP server ready and waiting:", testHttpServer.URL)
 	c := make(chan int)
 	<-c
 }

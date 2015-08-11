@@ -1,14 +1,14 @@
 package main
 
 import (
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"io"
 )
 
-func setLogLevel(lvl logrus.Level) {
-	logrus.SetLevel(lvl)
+func setLogLevel(lvl log.Level) {
+	log.SetLevel(lvl)
 }
 
 func initLogging(stderr io.Writer) {
-	logrus.SetOutput(stderr)
+	log.SetOutput(stderr)
 }

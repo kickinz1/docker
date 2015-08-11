@@ -7,7 +7,6 @@ import (
 
 	"github.com/docker/docker/daemon/logger"
 	"github.com/docker/docker/pkg/jsonlog"
-	"github.com/docker/docker/pkg/timeutils"
 )
 
 // JSONFileLogger is Logger implementation for default docker logging:
@@ -34,11 +33,7 @@ func New(filename string) (logger.Logger, error) {
 func (l *JSONFileLogger) Log(msg *logger.Message) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	timestamp, err := timeutils.FastMarshalJSON(msg.Timestamp)
-	if err != nil {
-		return err
-	}
-	err = (&jsonlog.JSONLogBytes{Log: append(msg.Line, '\n'), Stream: msg.Source, Created: timestamp}).MarshalJSONBuf(l.buf)
+	err := (&jsonlog.JSONLog{Log: string(msg.Line) + "\n", Stream: msg.Source, Created: msg.Timestamp}).MarshalJSONBuf(l.buf)
 	if err != nil {
 		return err
 	}

@@ -157,47 +157,15 @@ func (sw *shellWord) processDollar() (string, error) {
 			sw.next()
 			return sw.getEnv(name), nil
 		}
-		if ch == ':' {
-			// Special ${xx:...} format processing
-			// Yes it allows for recursive $'s in the ... spot
-
-			sw.next() // skip over :
-			modifier := sw.next()
-
-			word, err := sw.processStopOn('}')
-			if err != nil {
-				return "", err
-			}
-
-			// Grab the current value of the variable in question so we
-			// can use to to determine what to do based on the modifier
-			newValue := sw.getEnv(name)
-
-			switch modifier {
-			case '+':
-				if newValue != "" {
-					newValue = word
-				}
-				return newValue, nil
-
-			case '-':
-				if newValue == "" {
-					newValue = word
-				}
-				return newValue, nil
-
-			default:
-				return "", fmt.Errorf("Unsupported modifier (%c) in substitution: %s", modifier, sw.word)
-			}
+		return "", fmt.Errorf("Unsupported ${} substitution: %s", sw.word)
+	} else {
+		// $xxx case
+		name := sw.processName()
+		if name == "" {
+			return "$", nil
 		}
-		return "", fmt.Errorf("Missing ':' in substitution: %s", sw.word)
+		return sw.getEnv(name), nil
 	}
-	// $xxx case
-	name := sw.processName()
-	if name == "" {
-		return "$", nil
-	}
-	return sw.getEnv(name), nil
 }
 
 func (sw *shellWord) processName() string {

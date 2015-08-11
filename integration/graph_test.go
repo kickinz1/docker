@@ -2,19 +2,19 @@ package docker
 
 import (
 	"errors"
+	"github.com/docker/docker/autogen/dockerversion"
+	"github.com/docker/docker/daemon/graphdriver"
+	"github.com/docker/docker/graph"
+	"github.com/docker/docker/image"
+	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/pkg/common"
+	"github.com/docker/docker/utils"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
 	"testing"
 	"time"
-
-	"github.com/docker/docker/autogen/dockerversion"
-	"github.com/docker/docker/daemon/graphdriver"
-	"github.com/docker/docker/graph"
-	"github.com/docker/docker/image"
-	"github.com/docker/docker/pkg/archive"
-	"github.com/docker/docker/pkg/stringid"
 )
 
 func TestMount(t *testing.T) {
@@ -70,7 +70,7 @@ func TestInterruptedRegister(t *testing.T) {
 	defer nukeGraph(graph)
 	badArchive, w := io.Pipe() // Use a pipe reader as a fake archive which never yields data
 	image := &image.Image{
-		ID:      stringid.GenerateRandomID(),
+		ID:      common.GenerateRandomID(),
 		Comment: "testing",
 		Created: time.Now(),
 	}
@@ -102,7 +102,7 @@ func TestGraphCreate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := image.ValidateID(img.ID); err != nil {
+	if err := utils.ValidateID(img.ID); err != nil {
 		t.Fatal(err)
 	}
 	if img.Comment != "Testing" {
@@ -130,7 +130,7 @@ func TestRegister(t *testing.T) {
 		t.Fatal(err)
 	}
 	image := &image.Image{
-		ID:      stringid.GenerateRandomID(),
+		ID:      common.GenerateRandomID(),
 		Comment: "testing",
 		Created: time.Now(),
 	}
@@ -160,7 +160,7 @@ func TestDeletePrefix(t *testing.T) {
 	graph, _ := tempGraph(t)
 	defer nukeGraph(graph)
 	img := createTestImage(graph, t)
-	if err := graph.Delete(stringid.TruncateID(img.ID)); err != nil {
+	if err := graph.Delete(common.TruncateID(img.ID)); err != nil {
 		t.Fatal(err)
 	}
 	assertNImages(graph, t, 0)
@@ -246,19 +246,19 @@ func TestByParent(t *testing.T) {
 	graph, _ := tempGraph(t)
 	defer nukeGraph(graph)
 	parentImage := &image.Image{
-		ID:      stringid.GenerateRandomID(),
+		ID:      common.GenerateRandomID(),
 		Comment: "parent",
 		Created: time.Now(),
 		Parent:  "",
 	}
 	childImage1 := &image.Image{
-		ID:      stringid.GenerateRandomID(),
+		ID:      common.GenerateRandomID(),
 		Comment: "child1",
 		Created: time.Now(),
 		Parent:  parentImage.ID,
 	}
 	childImage2 := &image.Image{
-		ID:      stringid.GenerateRandomID(),
+		ID:      common.GenerateRandomID(),
 		Comment: "child2",
 		Created: time.Now(),
 		Parent:  parentImage.ID,

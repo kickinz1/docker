@@ -42,12 +42,12 @@ containers run directly on your localhost. This means you can address ports on a
 Docker container using standard localhost addressing such as `localhost:8000` or
 `0.0.0.0:8376`.
 
-![Linux Architecture Diagram](/installation/images/linux_docker_host.svg)
+![Linux Architecture Diagram](/installation/images/linux_docker_host.png)
 
 In an OS X installation, the `docker` daemon is running inside a Linux virtual
 machine provided by Boot2Docker.
 
-![OSX Architecture Diagram](/installation/images/mac_docker_host.svg)
+![OSX Architecture Diagram](/installation/images/mac_docker_host.png)
 
 In OS X, the Docker host address is the address of the Linux VM.
 When you start the `boot2docker` process, the VM is assigned an IP address. Under

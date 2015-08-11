@@ -16,12 +16,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/execdriver"
-	"github.com/docker/docker/pkg/stringutils"
 	sysinfo "github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/pkg/term"
 	"github.com/docker/docker/pkg/version"
+	"github.com/docker/docker/utils"
 	"github.com/docker/libcontainer"
 	"github.com/docker/libcontainer/cgroups"
 	"github.com/docker/libcontainer/configs"
@@ -187,13 +187,13 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		// without exec in go we have to do this horrible shell hack...
 		shellString :=
 			"mount --make-rslave /; exec " +
-				stringutils.ShellQuoteArguments(params)
+				utils.ShellQuoteArguments(params)
 
 		params = []string{
 			"unshare", "-m", "--", "/bin/sh", "-c", shellString,
 		}
 	}
-	logrus.Debugf("lxc params %s", params)
+	log.Debugf("lxc params %s", params)
 	var (
 		name = params[0]
 		arg  = params[1:]
@@ -263,7 +263,7 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	c.ContainerPid = pid
 
 	if startCallback != nil {
-		logrus.Debugf("Invoking startCallback")
+		log.Debugf("Invoking startCallback")
 		startCallback(&c.ProcessConfig, pid)
 	}
 
@@ -274,9 +274,9 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 
 	if err == nil {
 		_, oomKill = <-oomKillNotification
-		logrus.Debugf("oomKill error %s waitErr %s", oomKill, waitErr)
+		log.Debugf("oomKill error %s waitErr %s", oomKill, waitErr)
 	} else {
-		logrus.Warnf("Your kernel does not support OOM notifications: %s", err)
+		log.Warnf("Your kernel does not support OOM notifications: %s", err)
 	}
 
 	// check oom error
@@ -351,11 +351,11 @@ func cgroupPaths(containerId string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	logrus.Debugf("subsystems: %s", subsystems)
+	log.Debugf("subsystems: %s", subsystems)
 	paths := make(map[string]string)
 	for _, subsystem := range subsystems {
 		cgroupRoot, cgroupDir, err := findCgroupRootAndDir(subsystem)
-		logrus.Debugf("cgroup path %s %s", cgroupRoot, cgroupDir)
+		log.Debugf("cgroup path %s %s", cgroupRoot, cgroupDir)
 		if err != nil {
 			//unsupported subystem
 			continue
@@ -576,7 +576,7 @@ func (i *info) IsRunning() bool {
 
 	output, err := i.driver.getInfo(i.ID)
 	if err != nil {
-		logrus.Errorf("Error getting info for lxc container %s: %s (%s)", i.ID, err, output)
+		log.Errorf("Error getting info for lxc container %s: %s (%s)", i.ID, err, output)
 		return false
 	}
 	if strings.Contains(string(output), "RUNNING") {

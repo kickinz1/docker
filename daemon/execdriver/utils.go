@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/docker/docker/pkg/stringutils"
+	"github.com/docker/docker/utils"
 	"github.com/syndtr/gocapability/capability"
 )
 
@@ -89,17 +89,17 @@ func TweakCapabilities(basics, adds, drops []string) ([]string, error) {
 		if strings.ToLower(cap) == "all" {
 			continue
 		}
-		if !stringutils.InSlice(allCaps, cap) {
+		if !utils.StringsContainsNoCase(allCaps, cap) {
 			return nil, fmt.Errorf("Unknown capability drop: %q", cap)
 		}
 	}
 
 	// handle --cap-add=all
-	if stringutils.InSlice(adds, "all") {
+	if utils.StringsContainsNoCase(adds, "all") {
 		basics = allCaps
 	}
 
-	if !stringutils.InSlice(drops, "all") {
+	if !utils.StringsContainsNoCase(drops, "all") {
 		for _, cap := range basics {
 			// skip `all` aready handled above
 			if strings.ToLower(cap) == "all" {
@@ -107,7 +107,7 @@ func TweakCapabilities(basics, adds, drops []string) ([]string, error) {
 			}
 
 			// if we don't drop `all`, add back all the non-dropped caps
-			if !stringutils.InSlice(drops, cap) {
+			if !utils.StringsContainsNoCase(drops, cap) {
 				newCaps = append(newCaps, strings.ToUpper(cap))
 			}
 		}
@@ -119,12 +119,12 @@ func TweakCapabilities(basics, adds, drops []string) ([]string, error) {
 			continue
 		}
 
-		if !stringutils.InSlice(allCaps, cap) {
+		if !utils.StringsContainsNoCase(allCaps, cap) {
 			return nil, fmt.Errorf("Unknown capability to add: %q", cap)
 		}
 
 		// add cap if not already in the list
-		if !stringutils.InSlice(newCaps, cap) {
+		if !utils.StringsContainsNoCase(newCaps, cap) {
 			newCaps = append(newCaps, strings.ToUpper(cap))
 		}
 	}

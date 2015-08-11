@@ -3,15 +3,19 @@ package graph
 import (
 	"strings"
 
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/engine"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/utils"
 )
 
-func (s *TagStore) History(name string) ([]*types.ImageHistory, error) {
+func (s *TagStore) CmdHistory(job *engine.Job) engine.Status {
+	if n := len(job.Args); n != 1 {
+		return job.Errorf("Usage: %s IMAGE", job.Name)
+	}
+	name := job.Args[0]
 	foundImage, err := s.LookupImage(name)
 	if err != nil {
-		return nil, err
+		return job.Error(err)
 	}
 
 	lookupMap := make(map[string][]string)
@@ -25,19 +29,19 @@ func (s *TagStore) History(name string) ([]*types.ImageHistory, error) {
 		}
 	}
 
-	history := []*types.ImageHistory{}
-
+	outs := engine.NewTable("Created", 0)
 	err = foundImage.WalkHistory(func(img *image.Image) error {
-		history = append(history, &types.ImageHistory{
-			ID:        img.ID,
-			Created:   img.Created.Unix(),
-			CreatedBy: strings.Join(img.ContainerConfig.Cmd, " "),
-			Tags:      lookupMap[img.ID],
-			Size:      img.Size,
-			Comment:   img.Comment,
-		})
+		out := &engine.Env{}
+		out.SetJson("Id", img.ID)
+		out.SetInt64("Created", img.Created.Unix())
+		out.Set("CreatedBy", strings.Join(img.ContainerConfig.Cmd, " "))
+		out.SetList("Tags", lookupMap[img.ID])
+		out.SetInt64("Size", img.Size)
+		outs.Add(out)
 		return nil
 	})
-
-	return history, err
+	if _, err := outs.WriteListTo(job.Stdout); err != nil {
+		return job.Error(err)
+	}
+	return engine.StatusOK
 }

@@ -239,18 +239,17 @@ func parseJSON(rest string) (*Node, map[string]bool, error) {
 
 	var top, prev *Node
 	for _, str := range myJson {
-		s, ok := str.(string)
-		if !ok {
+		if s, ok := str.(string); !ok {
 			return nil, nil, errDockerfileNotStringArray
-		}
-
-		node := &Node{Value: s}
-		if prev == nil {
-			top = node
 		} else {
-			prev.Next = node
+			node := &Node{Value: s}
+			if prev == nil {
+				top = node
+			} else {
+				prev.Next = node
+			}
+			prev = node
 		}
-		prev = node
 	}
 
 	return top, map[string]bool{"json": true}, nil
@@ -279,7 +278,7 @@ func parseMaybeJSON(rest string) (*Node, map[string]bool, error) {
 }
 
 // parseMaybeJSONToList determines if the argument appears to be a JSON array. If
-// so, passes to parseJSON; if not, attempts to parse it as a whitespace
+// so, passes to parseJSON; if not, attmpts to parse it as a whitespace
 // delimited string.
 func parseMaybeJSONToList(rest string) (*Node, map[string]bool, error) {
 	node, attrs, err := parseJSON(rest)

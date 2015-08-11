@@ -19,23 +19,23 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/builder/parser"
 	"github.com/docker/docker/daemon"
 	imagepkg "github.com/docker/docker/image"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/chrootarchive"
-	"github.com/docker/docker/pkg/httputils"
+	"github.com/docker/docker/pkg/common"
 	"github.com/docker/docker/pkg/ioutils"
-	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/pkg/progressreader"
-	"github.com/docker/docker/pkg/stringid"
 	"github.com/docker/docker/pkg/symlink"
 	"github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/pkg/tarsum"
 	"github.com/docker/docker/pkg/urlutil"
+	"github.com/docker/docker/registry"
 	"github.com/docker/docker/runconfig"
+	"github.com/docker/docker/utils"
 )
 
 func (b *Builder) readContext(context io.Reader) error {
@@ -250,7 +250,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 		*cInfos = append(*cInfos, &ci)
 
 		// Initiate the download
-		resp, err := httputils.Download(ci.origPath)
+		resp, err := utils.Download(ci.origPath)
 		if err != nil {
 			return err
 		}
@@ -438,7 +438,7 @@ func (b *Builder) pullImage(name string) (*imagepkg.Image, error) {
 	pullRegistryAuth := b.AuthConfig
 	if len(b.AuthConfigFile.Configs) > 0 {
 		// The request came with a full auth config file, we prefer to use that
-		repoInfo, err := b.Daemon.RegistryService.ResolveRepository(remote)
+		repoInfo, err := registry.ResolveRepositoryInfo(job, remote)
 		if err != nil {
 			return nil, err
 		}
@@ -521,13 +521,13 @@ func (b *Builder) probeCache() (bool, error) {
 		return false, err
 	}
 	if cache == nil {
-		logrus.Debugf("[BUILDER] Cache miss")
+		log.Debugf("[BUILDER] Cache miss")
 		b.cacheBusted = true
 		return false, nil
 	}
 
 	fmt.Fprintf(b.OutStream, " ---> Using cache\n")
-	logrus.Debugf("[BUILDER] Use cached version")
+	log.Debugf("[BUILDER] Use cached version")
 	b.image = cache.ID
 	return true, nil
 }
@@ -557,7 +557,7 @@ func (b *Builder) create() (*daemon.Container, error) {
 	}
 
 	b.TmpContainers[c.ID] = struct{}{}
-	fmt.Fprintf(b.OutStream, " ---> Running in %s\n", stringid.TruncateID(c.ID))
+	fmt.Fprintf(b.OutStream, " ---> Running in %s\n", common.TruncateID(c.ID))
 
 	if len(config.Cmd) > 0 {
 		// override the entry point that may have been picked up from the base image
@@ -573,7 +573,7 @@ func (b *Builder) create() (*daemon.Container, error) {
 func (b *Builder) run(c *daemon.Container) error {
 	var errCh chan error
 	if b.Verbose {
-		errCh = c.Attach(nil, b.OutStream, b.ErrStream)
+		errCh = b.Daemon.Attach(&c.StreamConfig, c.Config.OpenStdin, c.Config.StdinOnce, c.Config.Tty, nil, b.OutStream, b.ErrStream)
 	}
 
 	//start the container
@@ -586,7 +586,7 @@ func (b *Builder) run(c *daemon.Container) error {
 	go func() {
 		select {
 		case <-b.cancelled:
-			logrus.Debugln("Build cancelled, killing container:", c.ID)
+			log.Debugln("Build cancelled, killing container:", c.ID)
 			c.Kill()
 		case <-finished:
 		}
@@ -601,7 +601,7 @@ func (b *Builder) run(c *daemon.Container) error {
 
 	// Wait for it to finish
 	if ret, _ := c.WaitStop(-1 * time.Second); ret != 0 {
-		err := &jsonmessage.JSONError{
+		err := &utils.JSONError{
 			Message: fmt.Sprintf("The command %v returned a non-zero code: %d", b.Config.Cmd, ret),
 			Code:    ret,
 		}
@@ -687,7 +687,7 @@ func (b *Builder) addContext(container *daemon.Container, orig, dest string, dec
 		if err := chrootarchive.UntarPath(origPath, tarDest); err == nil {
 			return nil
 		} else if err != io.EOF {
-			logrus.Debugf("Couldn't untar %s to %s: %s", origPath, tarDest, err)
+			log.Debugf("Couldn't untar %s to %s: %s", origPath, tarDest, err)
 		}
 	}
 
@@ -753,11 +753,11 @@ func (b *Builder) clearTmp() {
 		}
 
 		if err := b.Daemon.Rm(tmp); err != nil {
-			fmt.Fprintf(b.OutStream, "Error removing intermediate container %s: %v\n", stringid.TruncateID(c), err)
+			fmt.Fprintf(b.OutStream, "Error removing intermediate container %s: %v\n", common.TruncateID(c), err)
 			return
 		}
 		b.Daemon.DeleteVolumes(tmp.VolumePaths())
 		delete(b.TmpContainers, c)
-		fmt.Fprintf(b.OutStream, "Removing intermediate container %s\n", stringid.TruncateID(c))
+		fmt.Fprintf(b.OutStream, "Removing intermediate container %s\n", common.TruncateID(c))
 	}
 }

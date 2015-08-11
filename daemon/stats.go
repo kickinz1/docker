@@ -2,20 +2,20 @@ package daemon
 
 import (
 	"encoding/json"
-	"io"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/daemon/execdriver"
+	"github.com/docker/docker/engine"
 	"github.com/docker/libcontainer"
 	"github.com/docker/libcontainer/cgroups"
 )
 
-func (daemon *Daemon) ContainerStats(name string, out io.Writer) error {
-	updates, err := daemon.SubscribeToContainerStats(name)
+func (daemon *Daemon) ContainerStats(job *engine.Job) engine.Status {
+	updates, err := daemon.SubscribeToContainerStats(job.Args[0])
 	if err != nil {
-		return err
+		return job.Error(err)
 	}
-	enc := json.NewEncoder(out)
+	enc := json.NewEncoder(job.Stdout)
 	for v := range updates {
 		update := v.(*execdriver.ResourceStats)
 		ss := convertToAPITypes(update.Stats)
@@ -24,11 +24,11 @@ func (daemon *Daemon) ContainerStats(name string, out io.Writer) error {
 		ss.CpuStats.SystemUsage = update.SystemUsage
 		if err := enc.Encode(ss); err != nil {
 			// TODO: handle the specific broken pipe
-			daemon.UnsubscribeToContainerStats(name, updates)
-			return err
+			daemon.UnsubscribeToContainerStats(job.Args[0], updates)
+			return job.Error(err)
 		}
 	}
-	return nil
+	return engine.StatusOK
 }
 
 // convertToAPITypes converts the libcontainer.Stats to the api specific

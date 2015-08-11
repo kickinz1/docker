@@ -5,16 +5,19 @@ import (
 	"log/syslog"
 	"os"
 	"path"
+	"sync"
 
 	"github.com/docker/docker/daemon/logger"
 )
 
 type Syslog struct {
 	writer *syslog.Writer
+	tag    string
+	mu     sync.Mutex
 }
 
 func New(tag string) (logger.Logger, error) {
-	log, err := syslog.New(syslog.LOG_USER, fmt.Sprintf("%s: <%s> ", path.Base(os.Args[0]), tag))
+	log, err := syslog.New(syslog.LOG_DAEMON, fmt.Sprintf("%s/%s", path.Base(os.Args[0]), tag))
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +34,10 @@ func (s *Syslog) Log(msg *logger.Message) error {
 }
 
 func (s *Syslog) Close() error {
-	return s.writer.Close()
+	if s.writer != nil {
+		return s.writer.Close()
+	}
+	return nil
 }
 
 func (s *Syslog) Name() string {

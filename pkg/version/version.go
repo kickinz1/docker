@@ -37,7 +37,7 @@ func (v Version) compareTo(other Version) int {
 	return 0
 }
 
-// LessThan checks if a version is less than another
+// LessThan checks if a version is less than another version
 func (v Version) LessThan(other Version) bool {
 	return v.compareTo(other) == -1
 }
@@ -47,12 +47,12 @@ func (v Version) LessThanOrEqualTo(other Version) bool {
 	return v.compareTo(other) <= 0
 }
 
-// GreaterThan checks if a version is greater than another
+// GreaterThan checks if a version is greater than another one
 func (v Version) GreaterThan(other Version) bool {
 	return v.compareTo(other) == 1
 }
 
-// GreaterThanOrEqualTo checks if a version is greater than or equal to another
+// GreaterThanOrEqualTo checks ia version is greater than or equal to another
 func (v Version) GreaterThanOrEqualTo(other Version) bool {
 	return v.compareTo(other) >= 0
 }

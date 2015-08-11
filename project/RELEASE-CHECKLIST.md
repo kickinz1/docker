@@ -145,7 +145,7 @@ To test locally:
 make docs
 ```
 
-To make a shared test at https://beta-docs.docker.io:
+To make a shared test at http://beta-docs.docker.io:
 
 (You will need the `awsconfig` file added to the `docs/` dir)
 
@@ -341,7 +341,7 @@ git push -f origin docs
 make AWS_S3_BUCKET=docs.docker.com BUILD_ROOT=yes DISTRIBUTION_ID=C2K6......FL2F docs-release
 ```
 
-The docs will appear on https://docs.docker.com/ (though there may be cached
+The docs will appear on http://docs.docker.com/ (though there may be cached
 versions, so its worth checking http://docs.docker.com.s3-website-us-east-1.amazonaws.com/).
 For more information about documentation releases, see `docs/README.md`.
 
@@ -364,17 +364,7 @@ echo "https://github.com/$GITHUBUSER/docker/compare/docker:master...$GITHUBUSER:
 Again, get two maintainers to validate, then merge, then push that pretty
 blue button to delete your branch.
 
-### 13. Update the API docs and VERSION files
-
-Now that version X.Y.Z is out, time to start working on the next! Update the
-content of the `VERSION` file to be the next minor (incrementing Y) and add the
-`-dev` suffix. For example, after 1.5.0 release, the `VERSION` file gets
-updated to `1.6.0-dev` (as in "1.6.0 in the making").
-
-Also create a new entry in `docs/sources/reference/api/` by copying the latest
-and bumping the version number (in both the file's name and content).
-
-### 14. Rejoice and Evangelize!
+### 13. Rejoice and Evangelize!
 
 Congratulations! You're done.
 

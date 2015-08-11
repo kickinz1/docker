@@ -14,17 +14,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/distribution/digest"
 	"github.com/docker/docker/autogen/dockerversion"
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/pkg/common"
 	"github.com/docker/docker/pkg/progressreader"
-	"github.com/docker/docker/pkg/streamformatter"
-	"github.com/docker/docker/pkg/stringid"
 	"github.com/docker/docker/pkg/truncindex"
 	"github.com/docker/docker/runconfig"
+	"github.com/docker/docker/utils"
 )
 
 // A Graph is a store for versioned filesystem images and the relationship between them.
@@ -70,14 +70,14 @@ func (graph *Graph) restore() error {
 		}
 	}
 	graph.idIndex = truncindex.NewTruncIndex(ids)
-	logrus.Debugf("Restored %d elements", len(dir))
+	log.Debugf("Restored %d elements", len(dir))
 	return nil
 }
 
 // FIXME: Implement error subclass instead of looking at the error text
 // Note: This is the way golang implements os.IsNotExists on Plan9
-func (graph *Graph) IsNotExist(err error, id string) bool {
-	return err != nil && (strings.Contains(strings.ToLower(err.Error()), "does not exist") || strings.Contains(strings.ToLower(err.Error()), "no such")) && strings.Contains(err.Error(), id)
+func (graph *Graph) IsNotExist(err error) bool {
+	return err != nil && (strings.Contains(strings.ToLower(err.Error()), "does not exist") || strings.Contains(strings.ToLower(err.Error()), "no such"))
 }
 
 // Exists returns true if an image is registered at the given id.
@@ -121,7 +121,7 @@ func (graph *Graph) Get(name string) (*image.Image, error) {
 // Create creates a new image and registers it in the graph.
 func (graph *Graph) Create(layerData archive.ArchiveReader, containerID, containerImage, comment, author string, containerConfig, config *runconfig.Config) (*image.Image, error) {
 	img := &image.Image{
-		ID:            stringid.GenerateRandomID(),
+		ID:            common.GenerateRandomID(),
 		Comment:       comment,
 		Created:       time.Now().UTC(),
 		DockerVersion: dockerversion.VERSION,
@@ -153,7 +153,7 @@ func (graph *Graph) Register(img *image.Image, layerData archive.ArchiveReader) 
 			graph.driver.Remove(img.ID)
 		}
 	}()
-	if err := image.ValidateID(img.ID); err != nil {
+	if err := utils.ValidateID(img.ID); err != nil {
 		return err
 	}
 	// (This is a convenience to save time. Race conditions are taken care of by os.Rename)
@@ -201,7 +201,7 @@ func (graph *Graph) Register(img *image.Image, layerData archive.ArchiveReader) 
 //   The archive is stored on disk and will be automatically deleted as soon as has been read.
 //   If output is not nil, a human-readable progress bar will be written to it.
 //   FIXME: does this belong in Graph? How about MktempFile, let the caller use it for archives?
-func (graph *Graph) TempLayerArchive(id string, sf *streamformatter.StreamFormatter, output io.Writer) (*archive.TempArchive, error) {
+func (graph *Graph) TempLayerArchive(id string, sf *utils.StreamFormatter, output io.Writer) (*archive.TempArchive, error) {
 	image, err := graph.Get(id)
 	if err != nil {
 		return nil, err
@@ -220,7 +220,7 @@ func (graph *Graph) TempLayerArchive(id string, sf *streamformatter.StreamFormat
 		Formatter: sf,
 		Size:      0,
 		NewLines:  false,
-		ID:        stringid.TruncateID(id),
+		ID:        common.TruncateID(id),
 		Action:    "Buffering to disk",
 	})
 	defer progressReader.Close()
@@ -229,7 +229,7 @@ func (graph *Graph) TempLayerArchive(id string, sf *streamformatter.StreamFormat
 
 // Mktemp creates a temporary sub-directory inside the graph's filesystem.
 func (graph *Graph) Mktemp(id string) (string, error) {
-	dir := path.Join(graph.Root, "_tmp", stringid.GenerateRandomID())
+	dir := path.Join(graph.Root, "_tmp", common.GenerateRandomID())
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", err
 	}

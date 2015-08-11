@@ -171,7 +171,6 @@ These labels appear as part of the `docker info` output for the daemon:
      Backing Filesystem: extfs
      Dirs: 697
     Execution Driver: native-0.2
-    Logging Driver: json-file
     Kernel Version: 3.13.0-32-generic
     Operating System: Ubuntu 14.04.1 LTS
     CPUs: 1
@@ -180,7 +179,7 @@ These labels appear as part of the `docker info` output for the daemon:
     ID: RC3P:JTCT:32YS:XYSB:YUBG:VFED:AAJZ:W3YW:76XO:D7NN:TEVU:UCRW
     Debug mode (server): false
     Debug mode (client): true
-    File Descriptors: 11
+    Fds: 11
     Goroutines: 14
     EventsListeners: 0
     Init Path: /usr/bin/docker

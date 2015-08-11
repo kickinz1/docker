@@ -1,27 +1,33 @@
 package daemon
 
 import (
-	"fmt"
 	"io"
+
+	"github.com/docker/docker/engine"
 )
 
-func (daemon *Daemon) ContainerExport(name string, out io.Writer) error {
+func (daemon *Daemon) ContainerExport(job *engine.Job) engine.Status {
+	if len(job.Args) != 1 {
+		return job.Errorf("Usage: %s container_id", job.Name)
+	}
+	name := job.Args[0]
+
 	container, err := daemon.Get(name)
 	if err != nil {
-		return err
+		return job.Error(err)
 	}
 
 	data, err := container.Export()
 	if err != nil {
-		return fmt.Errorf("%s: %s", name, err)
+		return job.Errorf("%s: %s", name, err)
 	}
 	defer data.Close()
 
 	// Stream the entire contents of the container (basically a volatile snapshot)
-	if _, err := io.Copy(out, data); err != nil {
-		return fmt.Errorf("%s: %s", name, err)
+	if _, err := io.Copy(job.Stdout, data); err != nil {
+		return job.Errorf("%s: %s", name, err)
 	}
 	// FIXME: factor job-specific LogEvent to engine.Job.Run()
 	container.LogEvent("export")
-	return nil
+	return engine.StatusOK
 }

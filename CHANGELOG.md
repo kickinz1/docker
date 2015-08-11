@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.6.2 (2015-05-13)
+
+####  Runtime
+- Revert change prohibiting mounting into /sys
+
+## 1.6.1 (2015-05-07)
+
+####  Security
+- Fix read/write /proc paths (CVE-2015-3630)
+- Prohibit VOLUME /proc and VOLUME / (CVE-2015-3631)
+- Fix opening of file-descriptor 1 (CVE-2015-3627)
+- Fix symlink traversal on container respawn allowing local privilege escalation (CVE-2015-3629)
+- Prohibit mount of /sys
+
+#### Runtime
+- Update Apparmor policy to not allow mounts
+
+## 1.6.0 (2015-04-07)
+
+#### Builder
++ Building images from an image ID
++ build containers with resource constraints, ie `docker build --cpu-shares=100 --memory=1024m...`
++ `commit --change` to apply specified Dockerfile instructions while committing the image
++ `import --change` to apply specified Dockerfile instructions while importing the image
++ basic build cancellation
+
+#### Client
++ Windows Support
+
+#### Runtime
++ Container and image Labels
++ `--cgroup-parent` for specifying a parent cgroup to place container cgroup within
++ Logging drivers, `json-file`, `syslog`, or `none`
++ Pulling images by ID
++ `--ulimit` to set the ulimit on a container
++ `--default-ulimit` option on the daemon which applies to all created containers (and overwritten by `--ulimit` on run)
+
 ## 1.5.0 (2015-02-10)
 
 #### Builder

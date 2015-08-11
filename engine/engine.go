@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/docker/docker/pkg/common"
 	"github.com/docker/docker/pkg/ioutils"
-	"github.com/docker/docker/pkg/stringid"
 )
 
 // Installer is a standard interface for objects which can "install" themselves
@@ -21,7 +21,7 @@ type Installer interface {
 	Install(*Engine) error
 }
 
-type Handler func(*Job) error
+type Handler func(*Job) Status
 
 var globalHandlers map[string]Handler
 
@@ -78,17 +78,17 @@ func (eng *Engine) RegisterCatchall(catchall Handler) {
 func New() *Engine {
 	eng := &Engine{
 		handlers: make(map[string]Handler),
-		id:       stringid.GenerateRandomID(),
+		id:       common.RandomString(),
 		Stdout:   os.Stdout,
 		Stderr:   os.Stderr,
 		Stdin:    os.Stdin,
 		Logging:  true,
 	}
-	eng.Register("commands", func(job *Job) error {
+	eng.Register("commands", func(job *Job) Status {
 		for _, name := range eng.commands() {
 			job.Printf("%s\n", name)
 		}
-		return nil
+		return StatusOK
 	})
 	// Copy existing global handlers
 	for k, v := range globalHandlers {

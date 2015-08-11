@@ -6,10 +6,10 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/execdriver"
 	nativeTemplate "github.com/docker/docker/daemon/execdriver/native/template"
-	"github.com/docker/docker/pkg/stringutils"
+	"github.com/docker/docker/utils"
 	"github.com/docker/libcontainer/label"
 )
 
@@ -62,7 +62,7 @@ lxc.pivotdir = lxc_putold
 # NOTICE: These mounts must be applied within the namespace
 {{if .ProcessConfig.Privileged}}
 # WARNING: mounting procfs and/or sysfs read-write is a known attack vector.
-# See e.g. http://blog.zx2c4.com/749 and https://bit.ly/T9CkqJ
+# See e.g. http://blog.zx2c4.com/749 and http://bit.ly/T9CkqJ
 # We mount them read-write here, but later, dockerinit will call the Restrict() function to remount them read-only.
 # We cannot mount them directly read-only, because that would prevent loading AppArmor profiles.
 lxc.mount.entry = proc {{escapeFstabSpaces $ROOTFS}}/proc proc nosuid,nodev,noexec 0 0
@@ -160,14 +160,14 @@ func escapeFstabSpaces(field string) string {
 
 func keepCapabilities(adds []string, drops []string) ([]string, error) {
 	container := nativeTemplate.New()
-	logrus.Debugf("adds %s drops %s\n", adds, drops)
+	log.Debugf("adds %s drops %s\n", adds, drops)
 	caps, err := execdriver.TweakCapabilities(container.Capabilities, adds, drops)
 	if err != nil {
 		return nil, err
 	}
 	var newCaps []string
 	for _, cap := range caps {
-		logrus.Debugf("cap %s\n", cap)
+		log.Debugf("cap %s\n", cap)
 		realCap := execdriver.GetCapability(cap)
 		numCap := fmt.Sprintf("%d", realCap.Value)
 		newCaps = append(newCaps, numCap)
@@ -177,11 +177,11 @@ func keepCapabilities(adds []string, drops []string) ([]string, error) {
 }
 
 func dropList(drops []string) ([]string, error) {
-	if stringutils.InSlice(drops, "all") {
+	if utils.StringsContainsNoCase(drops, "all") {
 		var newCaps []string
 		for _, capName := range execdriver.GetAllCapabilities() {
 			cap := execdriver.GetCapability(capName)
-			logrus.Debugf("drop cap %s\n", cap.Key)
+			log.Debugf("drop cap %s\n", cap.Key)
 			numCap := fmt.Sprintf("%d", cap.Value)
 			newCaps = append(newCaps, numCap)
 		}
@@ -192,7 +192,7 @@ func dropList(drops []string) ([]string, error) {
 
 func isDirectory(source string) string {
 	f, err := os.Stat(source)
-	logrus.Debugf("dir: %s\n", source)
+	log.Debugf("dir: %s\n", source)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "dir"

@@ -6,7 +6,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/networkdriver"
 )
 
@@ -41,24 +41,19 @@ var (
 	ErrBadSubnet                = errors.New("network does not contain specified subnet")
 )
 
-type IPAllocator struct {
-	allocatedIPs networkSet
-	mutex        sync.Mutex
-}
-
-func New() *IPAllocator {
-	return &IPAllocator{networkSet{}, sync.Mutex{}}
-}
+var (
+	lock         = sync.Mutex{}
+	allocatedIPs = networkSet{}
+)
 
 // RegisterSubnet registers network in global allocator with bounds
 // defined by subnet. If you want to use network range you must call
 // this method before first RequestIP, otherwise full network range will be used
-func (a *IPAllocator) RegisterSubnet(network *net.IPNet, subnet *net.IPNet) error {
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
-
+func RegisterSubnet(network *net.IPNet, subnet *net.IPNet) error {
+	lock.Lock()
+	defer lock.Unlock()
 	key := network.String()
-	if _, ok := a.allocatedIPs[key]; ok {
+	if _, ok := allocatedIPs[key]; ok {
 		return ErrNetworkAlreadyRegistered
 	}
 	n := newAllocatedMap(network)
@@ -73,7 +68,7 @@ func (a *IPAllocator) RegisterSubnet(network *net.IPNet, subnet *net.IPNet) erro
 	n.begin.Set(begin)
 	n.end.Set(end)
 	n.last.Sub(begin, big.NewInt(1))
-	a.allocatedIPs[key] = n
+	allocatedIPs[key] = n
 	return nil
 }
 
@@ -81,15 +76,14 @@ func (a *IPAllocator) RegisterSubnet(network *net.IPNet, subnet *net.IPNet) erro
 // will return the next available ip if the ip provided is nil.  If the
 // ip provided is not nil it will validate that the provided ip is available
 // for use or return an error
-func (a *IPAllocator) RequestIP(network *net.IPNet, ip net.IP) (net.IP, error) {
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
-
+func RequestIP(network *net.IPNet, ip net.IP) (net.IP, error) {
+	lock.Lock()
+	defer lock.Unlock()
 	key := network.String()
-	allocated, ok := a.allocatedIPs[key]
+	allocated, ok := allocatedIPs[key]
 	if !ok {
 		allocated = newAllocatedMap(network)
-		a.allocatedIPs[key] = allocated
+		allocatedIPs[key] = allocated
 	}
 
 	if ip == nil {
@@ -100,11 +94,10 @@ func (a *IPAllocator) RequestIP(network *net.IPNet, ip net.IP) (net.IP, error) {
 
 // ReleaseIP adds the provided ip back into the pool of
 // available ips to be returned for use.
-func (a *IPAllocator) ReleaseIP(network *net.IPNet, ip net.IP) error {
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
-
-	if allocated, exists := a.allocatedIPs[network.String()]; exists {
+func ReleaseIP(network *net.IPNet, ip net.IP) error {
+	lock.Lock()
+	defer lock.Unlock()
+	if allocated, exists := allocatedIPs[network.String()]; exists {
 		delete(allocated.p, ip.String())
 	}
 	return nil
@@ -128,7 +121,7 @@ func (allocated *allocatedMap) checkIP(ip net.IP) (net.IP, error) {
 }
 
 // return an available ip if one is currently available.  If not,
-// return the next available ip for the network
+// return the next available ip for the nextwork
 func (allocated *allocatedMap) getNextIP() (net.IP, error) {
 	pos := big.NewInt(0).Set(allocated.last)
 	allRange := big.NewInt(0).Sub(allocated.end, allocated.begin)
@@ -157,7 +150,7 @@ func ipToBigInt(ip net.IP) *big.Int {
 		return x.SetBytes(ip6)
 	}
 
-	logrus.Errorf("ipToBigInt: Wrong IP length! %s", ip)
+	log.Errorf("ipToBigInt: Wrong IP length! %s", ip)
 	return nil
 }
 

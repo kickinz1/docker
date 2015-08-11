@@ -2,17 +2,16 @@ package links
 
 import (
 	"fmt"
+	"github.com/docker/docker/nat"
 	"strings"
 	"testing"
-
-	"github.com/docker/docker/nat"
 )
 
 func TestLinkNaming(t *testing.T) {
 	ports := make(nat.PortSet)
 	ports[nat.Port("6379/tcp")] = struct{}{}
 
-	link, err := NewLink("172.0.17.3", "172.0.17.2", "/db/docker-1", nil, ports)
+	link, err := NewLink("172.0.17.3", "172.0.17.2", "/db/docker-1", nil, ports, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +41,7 @@ func TestLinkNew(t *testing.T) {
 	ports := make(nat.PortSet)
 	ports[nat.Port("6379/tcp")] = struct{}{}
 
-	link, err := NewLink("172.0.17.3", "172.0.17.2", "/db/docker", nil, ports)
+	link, err := NewLink("172.0.17.3", "172.0.17.2", "/db/docker", nil, ports, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +72,7 @@ func TestLinkEnv(t *testing.T) {
 	ports := make(nat.PortSet)
 	ports[nat.Port("6379/tcp")] = struct{}{}
 
-	link, err := NewLink("172.0.17.3", "172.0.17.2", "/db/docker", []string{"PASSWORD=gordon"}, ports)
+	link, err := NewLink("172.0.17.3", "172.0.17.2", "/db/docker", []string{"PASSWORD=gordon"}, ports, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +115,7 @@ func TestLinkMultipleEnv(t *testing.T) {
 	ports[nat.Port("6380/tcp")] = struct{}{}
 	ports[nat.Port("6381/tcp")] = struct{}{}
 
-	link, err := NewLink("172.0.17.3", "172.0.17.2", "/db/docker", []string{"PASSWORD=gordon"}, ports)
+	link, err := NewLink("172.0.17.3", "172.0.17.2", "/db/docker", []string{"PASSWORD=gordon"}, ports, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +164,7 @@ func TestLinkPortRangeEnv(t *testing.T) {
 	ports[nat.Port("6380/tcp")] = struct{}{}
 	ports[nat.Port("6381/tcp")] = struct{}{}
 
-	link, err := NewLink("172.0.17.3", "172.0.17.2", "/db/docker", []string{"PASSWORD=gordon"}, ports)
+	link, err := NewLink("172.0.17.3", "172.0.17.2", "/db/docker", []string{"PASSWORD=gordon"}, ports, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

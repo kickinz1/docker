@@ -10,9 +10,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Sirupsen/logrus"
-	"github.com/docker/distribution/registry/api/v2"
-	"github.com/docker/docker/pkg/requestdecorator"
+	log "github.com/Sirupsen/logrus"
+	"github.com/docker/docker/registry/v2"
+	"github.com/docker/docker/utils"
 )
 
 // for mocking in unit tests
@@ -57,7 +57,7 @@ func NewEndpoint(index *IndexInfo) (*Endpoint, error) {
 }
 
 func validateEndpoint(endpoint *Endpoint) error {
-	logrus.Debugf("pinging registry endpoint %s", endpoint)
+	log.Debugf("pinging registry endpoint %s", endpoint)
 
 	// Try HTTPS ping to registry
 	endpoint.URL.Scheme = "https"
@@ -69,7 +69,7 @@ func validateEndpoint(endpoint *Endpoint) error {
 		}
 
 		// If registry is insecure and HTTPS failed, fallback to HTTP.
-		logrus.Debugf("Error from registry %q marked as insecure: %v. Insecurely falling back to HTTP", endpoint, err)
+		log.Debugf("Error from registry %q marked as insecure: %v. Insecurely falling back to HTTP", endpoint, err)
 		endpoint.URL.Scheme = "http"
 
 		var err2 error
@@ -162,8 +162,8 @@ func (e *Endpoint) Ping() (RegistryInfo, error) {
 	return RegistryInfo{}, fmt.Errorf("unable to ping registry endpoint %s\nv2 ping attempt failed with error: %s\n v1 ping attempt failed with error: %s", e, errV2, errV1)
 }
 
-func (e *Endpoint) pingV1(factory *requestdecorator.RequestFactory) (RegistryInfo, error) {
-	logrus.Debugf("attempting v1 ping for registry endpoint %s", e)
+func (e *Endpoint) pingV1(factory *utils.HTTPRequestFactory) (RegistryInfo, error) {
+	log.Debugf("attempting v1 ping for registry endpoint %s", e)
 
 	if e.String() == IndexServerAddress() {
 		// Skip the check, we know this one is valid
@@ -194,17 +194,17 @@ func (e *Endpoint) pingV1(factory *requestdecorator.RequestFactory) (RegistryInf
 		Standalone: true,
 	}
 	if err := json.Unmarshal(jsonString, &info); err != nil {
-		logrus.Debugf("Error unmarshalling the _ping RegistryInfo: %s", err)
+		log.Debugf("Error unmarshalling the _ping RegistryInfo: %s", err)
 		// don't stop here. Just assume sane defaults
 	}
 	if hdr := resp.Header.Get("X-Docker-Registry-Version"); hdr != "" {
-		logrus.Debugf("Registry version header: '%s'", hdr)
+		log.Debugf("Registry version header: '%s'", hdr)
 		info.Version = hdr
 	}
-	logrus.Debugf("RegistryInfo.Version: %q", info.Version)
+	log.Debugf("RegistryInfo.Version: %q", info.Version)
 
 	standalone := resp.Header.Get("X-Docker-Registry-Standalone")
-	logrus.Debugf("Registry standalone header: '%s'", standalone)
+	log.Debugf("Registry standalone header: '%s'", standalone)
 	// Accepted values are "true" (case-insensitive) and "1".
 	if strings.EqualFold(standalone, "true") || standalone == "1" {
 		info.Standalone = true
@@ -212,12 +212,12 @@ func (e *Endpoint) pingV1(factory *requestdecorator.RequestFactory) (RegistryInf
 		// there is a header set, and it is not "true" or "1", so assume fails
 		info.Standalone = false
 	}
-	logrus.Debugf("RegistryInfo.Standalone: %t", info.Standalone)
+	log.Debugf("RegistryInfo.Standalone: %t", info.Standalone)
 	return info, nil
 }
 
-func (e *Endpoint) pingV2(factory *requestdecorator.RequestFactory) (RegistryInfo, error) {
-	logrus.Debugf("attempting v2 ping for registry endpoint %s", e)
+func (e *Endpoint) pingV2(factory *utils.HTTPRequestFactory) (RegistryInfo, error) {
+	log.Debugf("attempting v2 ping for registry endpoint %s", e)
 
 	req, err := factory.NewRequest("GET", e.Path(""), nil)
 	if err != nil {

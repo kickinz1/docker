@@ -3,28 +3,26 @@ package graph
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/pkg/archive"
-	"github.com/docker/docker/pkg/httputils"
 	"github.com/docker/docker/pkg/progressreader"
-	"github.com/docker/docker/pkg/streamformatter"
 	"github.com/docker/docker/runconfig"
 	"github.com/docker/docker/utils"
 )
 
-func (s *TagStore) CmdImport(job *engine.Job) error {
+func (s *TagStore) CmdImport(job *engine.Job) engine.Status {
 	if n := len(job.Args); n != 2 && n != 3 {
-		return fmt.Errorf("Usage: %s SRC REPO [TAG]", job.Name)
+		return job.Errorf("Usage: %s SRC REPO [TAG]", job.Name)
 	}
 	var (
 		src          = job.Args[0]
 		repo         = job.Args[1]
 		tag          string
-		sf           = streamformatter.NewStreamFormatter(job.GetenvBool("json"))
+		sf           = utils.NewStreamFormatter(job.GetenvBool("json"))
 		archive      archive.ArchiveReader
 		resp         *http.Response
 		stdoutBuffer = bytes.NewBuffer(nil)
@@ -39,7 +37,7 @@ func (s *TagStore) CmdImport(job *engine.Job) error {
 	} else {
 		u, err := url.Parse(src)
 		if err != nil {
-			return err
+			return job.Error(err)
 		}
 		if u.Scheme == "" {
 			u.Scheme = "http"
@@ -47,9 +45,9 @@ func (s *TagStore) CmdImport(job *engine.Job) error {
 			u.Path = ""
 		}
 		job.Stdout.Write(sf.FormatStatus("", "Downloading from %s", u))
-		resp, err = httputils.Download(u.String())
+		resp, err = utils.Download(u.String())
 		if err != nil {
-			return err
+			return job.Error(err)
 		}
 		progressReader := progressreader.New(progressreader.Config{
 			In:        resp.Body,
@@ -71,20 +69,20 @@ func (s *TagStore) CmdImport(job *engine.Job) error {
 	buildConfigJob.Setenv("config", job.Getenv("config"))
 
 	if err := buildConfigJob.Run(); err != nil {
-		return err
+		return job.Error(err)
 	}
 	if err := json.NewDecoder(stdoutBuffer).Decode(&newConfig); err != nil {
-		return err
+		return job.Error(err)
 	}
 
 	img, err := s.graph.Create(archive, "", "", "Imported from "+src, "", nil, &newConfig)
 	if err != nil {
-		return err
+		return job.Error(err)
 	}
 	// Optionally register the image at REPO/TAG
 	if repo != "" {
 		if err := s.Set(repo, tag, img.ID, true); err != nil {
-			return err
+			return job.Error(err)
 		}
 	}
 	job.Stdout.Write(sf.FormatStatus("", img.ID))
@@ -92,7 +90,8 @@ func (s *TagStore) CmdImport(job *engine.Job) error {
 	if tag != "" {
 		logID = utils.ImageReference(logID, tag)
 	}
-
-	s.eventsService.Log("import", logID, "")
-	return nil
+	if err = job.Eng.Job("log", "import", logID, "").Run(); err != nil {
+		log.Errorf("Error logging event 'import' for %s: %s", logID, err)
+	}
+	return engine.StatusOK
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/engine"
 	"github.com/docker/libtrust"
 )
@@ -21,9 +21,9 @@ func (t *TrustStore) Install(eng *engine.Engine) error {
 	return nil
 }
 
-func (t *TrustStore) CmdCheckKey(job *engine.Job) error {
+func (t *TrustStore) CmdCheckKey(job *engine.Job) engine.Status {
 	if n := len(job.Args); n != 1 {
-		return fmt.Errorf("Usage: %s NAMESPACE", job.Name)
+		return job.Errorf("Usage: %s NAMESPACE", job.Name)
 	}
 	var (
 		namespace = job.Args[0]
@@ -31,11 +31,11 @@ func (t *TrustStore) CmdCheckKey(job *engine.Job) error {
 	)
 
 	if keyBytes == "" {
-		return fmt.Errorf("Missing PublicKey")
+		return job.Errorf("Missing PublicKey")
 	}
 	pk, err := libtrust.UnmarshalPublicKeyJWK([]byte(keyBytes))
 	if err != nil {
-		return fmt.Errorf("Error unmarshalling public key: %s", err)
+		return job.Errorf("Error unmarshalling public key: %s", err)
 	}
 
 	permission := uint16(job.GetenvInt("Permission"))
@@ -47,16 +47,16 @@ func (t *TrustStore) CmdCheckKey(job *engine.Job) error {
 	defer t.RUnlock()
 	if t.graph == nil {
 		job.Stdout.Write([]byte("no graph"))
-		return nil
+		return engine.StatusOK
 	}
 
 	// Check if any expired grants
 	verified, err := t.graph.Verify(pk, namespace, permission)
 	if err != nil {
-		return fmt.Errorf("Error verifying key to namespace: %s", namespace)
+		return job.Errorf("Error verifying key to namespace: %s", namespace)
 	}
 	if !verified {
-		logrus.Debugf("Verification failed for %s using key %s", namespace, pk.KeyID())
+		log.Debugf("Verification failed for %s using key %s", namespace, pk.KeyID())
 		job.Stdout.Write([]byte("not verified"))
 	} else if t.expiration.Before(time.Now()) {
 		job.Stdout.Write([]byte("expired"))
@@ -64,11 +64,11 @@ func (t *TrustStore) CmdCheckKey(job *engine.Job) error {
 		job.Stdout.Write([]byte("verified"))
 	}
 
-	return nil
+	return engine.StatusOK
 }
 
-func (t *TrustStore) CmdUpdateBase(job *engine.Job) error {
+func (t *TrustStore) CmdUpdateBase(job *engine.Job) engine.Status {
 	t.fetch()
 
-	return nil
+	return engine.StatusOK
 }

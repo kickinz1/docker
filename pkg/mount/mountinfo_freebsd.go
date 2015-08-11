@@ -13,8 +13,7 @@ import (
 	"unsafe"
 )
 
-// Parse /proc/self/mountinfo because comparing Dev and ino does not work from
-// bind mounts.
+// Parse /proc/self/mountinfo because comparing Dev and ino does not work from bind mounts
 func parseMountTable() ([]*MountInfo, error) {
 	var rawEntries *C.struct_statfs
 

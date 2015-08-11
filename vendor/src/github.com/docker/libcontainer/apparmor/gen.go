@@ -29,10 +29,10 @@ profile {{.Name}} flags=(attach_disconnected,mediate_deleted) {
   capability,
   network,
 
-  # the container may never be allowed to mount devpts.  If it does, it
-  # will remount the host's devpts.  We could allow it to do it with
-  # the newinstance option (but, right now, we don't).
-  deny mount fstype=devpts,
+  # Deny all mounts in app containers since it is dangerous and not allowed by
+  # default anyway. https://github.com/docker/libcontainer/pull/574
+  # 364d8e15050018e2a56f1c106e678ab32b167c40
+  deny mount,
 
   umount,
 
@@ -46,58 +46,15 @@ profile {{.Name}} flags=(attach_disconnected,mediate_deleted) {
   ptrace (readby, tracedby) peer="docker_docker{,-daemon}_*",
   signal (receive) peer="docker_docker{,-daemon}_*",
 
-  # ignore DENIED message on / remount
-  deny mount options=(ro, remount) -> /,
-  deny mount options=(ro, remount, silent) -> /,
-  deny mount options=(ro, remount, silent, relatime) -> /,
-  deny mount options=(rw, remount, silent, relatime) -> /,
-
-  # allow tmpfs mounts everywhere
-  mount fstype=tmpfs,
-
-  # allow devtmpfs mounts everywhere
-  mount fstype=devtmpfs,
-
-  # allow hugetlbfs mounts everywhere
-  mount fstype=hugetlbfs,
-
-  # allow mqueue mounts everywhere
-  mount fstype=mqueue,
-
-
-  # allow fuse mounts everywhere
-  mount fstype=fuse.*,
-
-  # deny writes in /proc/sys/fs but allow binfmt_misc to be mounted
-  mount fstype=binfmt_misc -> /proc/sys/fs/binfmt_misc/,
-  deny @{PROC}/sys/fs/** wklx,
-
-  # allow efivars to be mounted, writing to it will be blocked though
-  mount fstype=efivarfs -> /sys/firmware/efi/efivars/,
-
   # block some other dangerous paths
+  deny @{PROC}/sys/fs/** wklx,
   deny @{PROC}/sysrq-trigger rwklx,
   deny @{PROC}/mem rwklx,
   deny @{PROC}/kmem rwklx,
 
-  # deny writes in /sys except for /sys/fs/cgroup, also allow
-  # fusectl, securityfs and debugfs to be mounted there (read-only)
-  mount fstype=fusectl -> /sys/fs/fuse/connections/,
-  mount fstype=securityfs -> /sys/kernel/security/,
-  mount fstype=debugfs -> /sys/kernel/debug/,
-  deny mount fstype=debugfs -> /var/lib/ureadahead/debugfs/,
-
-  mount fstype=proc -> /proc/,
-  mount fstype=sysfs -> /sys/,
+  # deny writes in /sys except for /sys/fs/cgroup
   deny /sys/firmware/efi/efivars/** rwklx,
   deny /sys/kernel/security/** rwklx,
-
-  mount options=(move) /sys/fs/cgroup/cgmanager/ -> /sys/fs/cgroup/cgmanager.lower/,
-
-  mount options=(rw nosuid nodev noexec remount) -> /sys/,
-  mount options=(rw remount) -> /sys/kernel/security/,
-  mount options=(rw remount) -> /sys/fs/pstore/,
-  mount options=(ro remount) -> /sys/fs/pstore/,
 
   deny /proc/sys/[^kn]*{,/**} wklx,
   deny /proc/sys/k[^e]*{,/**} wklx,
@@ -171,9 +128,9 @@ profile {{.Name}} flags=(attach_disconnected,mediate_deleted) {
   deny /sys/fs/cg[^r]*{,/**} wklx,
   deny /sys/fs/cgr[^o]*{,/**} wklx,
   deny /sys/fs/cgro[^u]*{,/**} wklx,
+  deny /sys/fs/cgrou[^p]*{,/**} wklx,
   deny /sys/fs/cgroup?*{,/**} wklx,
   deny /sys/fs?*{,/**} wklx,
-
 }
 `
 

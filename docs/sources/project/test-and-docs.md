@@ -128,7 +128,7 @@ Run the entire test suite on your current repository:
 If you are working inside a Docker development container, you use the
 `hack/make.sh` script to run tests. The `hack/make.sh` script doesn't
 have a single target that runs all the tests. Instead, you provide a single
-command line with multiple targets that does the same thing.
+commmand line with multiple targets that does the same thing.
 
 Try this now.
 
@@ -169,7 +169,7 @@ To run the same test inside your Docker development container, you do this:
 
     root@5f8630b873fe:/go/src/github.com/docker/docker# TESTFLAGS='-run ^TestBuild$' hack/make.sh
 
-## If tests under Boot2Docker fail due to disk space errors
+## If test under Boot2Docker fail do to space errors
 
 Running the tests requires about 2GB of memory. If you are running your
 container on bare metal, that is you are not running with Boot2Docker, your
@@ -249,7 +249,7 @@ can browse the docs.
 
 1. In a terminal, change to the root of your `docker-fork` repository.
 
-        $ cd ~/repos/docker-fork
+        $ cd ~/repos/dry-run-test
 
 2. Make sure you are in your feature branch.
 

@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"os/exec"
-	"strings"
 	"testing"
 	"time"
 
@@ -23,7 +22,7 @@ func TestGetContainersAttachWebsocket(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cleanedContainerID := strings.TrimSpace(out)
+	cleanedContainerID := stripTrailingCharacters(out)
 	config, err := websocket.NewConfig(
 		"/containers/"+cleanedContainerID+"/attach/ws?stream=1&stdin=1&stdout=1&stderr=1",
 		"http://localhost",

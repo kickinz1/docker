@@ -15,7 +15,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/nat"
 	flag "github.com/docker/docker/pkg/mflag"
 	"github.com/docker/docker/runconfig"
@@ -166,12 +166,12 @@ func from(b *Builder, args []string, attributes map[string]bool, original string
 		}
 	}
 	if err != nil {
-		if b.Daemon.Graph().IsNotExist(err, name) {
+		if b.Daemon.Graph().IsNotExist(err) {
 			image, err = b.pullImage(name)
 		}
 
 		// note that the top level err will still be !nil here if IsNotExist is
-		// not the error. This approach just simplifies the logic a bit.
+		// not the error. This approach just simplifies hte logic a bit.
 		if err != nil {
 			return err
 		}
@@ -264,7 +264,7 @@ func run(b *Builder, args []string, attributes map[string]bool, original string)
 
 	defer func(cmd []string) { b.Config.Cmd = cmd }(cmd)
 
-	logrus.Debugf("[BUILDER] Command to be executed: %v", b.Config.Cmd)
+	log.Debugf("[BUILDER] Command to be executed: %v", b.Config.Cmd)
 
 	hit, err := b.probeCache()
 	if err != nil {

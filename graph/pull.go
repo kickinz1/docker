@@ -10,34 +10,33 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/distribution/digest"
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/image"
+	"github.com/docker/docker/pkg/common"
 	"github.com/docker/docker/pkg/progressreader"
-	"github.com/docker/docker/pkg/streamformatter"
-	"github.com/docker/docker/pkg/stringid"
 	"github.com/docker/docker/registry"
 	"github.com/docker/docker/utils"
 )
 
-func (s *TagStore) CmdPull(job *engine.Job) error {
+func (s *TagStore) CmdPull(job *engine.Job) engine.Status {
 	if n := len(job.Args); n != 1 && n != 2 {
-		return fmt.Errorf("Usage: %s IMAGE [TAG|DIGEST]", job.Name)
+		return job.Errorf("Usage: %s IMAGE [TAG|DIGEST]", job.Name)
 	}
 
 	var (
 		localName   = job.Args[0]
 		tag         string
-		sf          = streamformatter.NewStreamFormatter(job.GetenvBool("json"))
+		sf          = utils.NewStreamFormatter(job.GetenvBool("json"))
 		authConfig  = &registry.AuthConfig{}
 		metaHeaders map[string][]string
 	)
 
 	// Resolve the Repository name from fqn to RepositoryInfo
-	repoInfo, err := s.registryService.ResolveRepository(localName)
+	repoInfo, err := registry.ResolveRepositoryInfo(job, localName)
 	if err != nil {
-		return err
+		return job.Error(err)
 	}
 
 	if len(job.Args) > 1 {
@@ -53,21 +52,21 @@ func (s *TagStore) CmdPull(job *engine.Job) error {
 			// Another pull of the same repository is already taking place; just wait for it to finish
 			job.Stdout.Write(sf.FormatStatus("", "Repository %s already being pulled by another client. Waiting.", repoInfo.LocalName))
 			<-c
-			return nil
+			return engine.StatusOK
 		}
-		return err
+		return job.Error(err)
 	}
 	defer s.poolRemove("pull", utils.ImageReference(repoInfo.LocalName, tag))
 
-	logrus.Debugf("pulling image from host %q with remote name %q", repoInfo.Index.Name, repoInfo.RemoteName)
+	log.Debugf("pulling image from host %q with remote name %q", repoInfo.Index.Name, repoInfo.RemoteName)
 	endpoint, err := repoInfo.GetEndpoint()
 	if err != nil {
-		return err
+		return job.Error(err)
 	}
 
 	r, err := registry.NewSession(authConfig, registry.HTTPRequestFactory(metaHeaders), endpoint, true)
 	if err != nil {
-		return err
+		return job.Error(err)
 	}
 
 	logName := repoInfo.LocalName
@@ -79,32 +78,36 @@ func (s *TagStore) CmdPull(job *engine.Job) error {
 		if repoInfo.Official {
 			j := job.Eng.Job("trust_update_base")
 			if err = j.Run(); err != nil {
-				logrus.Errorf("error updating trust base graph: %s", err)
+				log.Errorf("error updating trust base graph: %s", err)
 			}
 		}
 
-		logrus.Debugf("pulling v2 repository with local name %q", repoInfo.LocalName)
+		log.Debugf("pulling v2 repository with local name %q", repoInfo.LocalName)
 		if err := s.pullV2Repository(job.Eng, r, job.Stdout, repoInfo, tag, sf, job.GetenvBool("parallel")); err == nil {
-			s.eventsService.Log("pull", logName, "")
-			return nil
+			if err = job.Eng.Job("log", "pull", logName, "").Run(); err != nil {
+				log.Errorf("Error logging event 'pull' for %s: %s", logName, err)
+			}
+			return engine.StatusOK
 		} else if err != registry.ErrDoesNotExist && err != ErrV2RegistryUnavailable {
-			logrus.Errorf("Error from V2 registry: %s", err)
+			log.Errorf("Error from V2 registry: %s", err)
 		}
 
-		logrus.Debug("image does not exist on v2 registry, falling back to v1")
+		log.Debug("image does not exist on v2 registry, falling back to v1")
 	}
 
-	logrus.Debugf("pulling v1 repository with local name %q", repoInfo.LocalName)
+	log.Debugf("pulling v1 repository with local name %q", repoInfo.LocalName)
 	if err = s.pullRepository(r, job.Stdout, repoInfo, tag, sf, job.GetenvBool("parallel")); err != nil {
-		return err
+		return job.Error(err)
 	}
 
-	s.eventsService.Log("pull", logName, "")
+	if err = job.Eng.Job("log", "pull", logName, "").Run(); err != nil {
+		log.Errorf("Error logging event 'pull' for %s: %s", logName, err)
+	}
 
-	return nil
+	return engine.StatusOK
 }
 
-func (s *TagStore) pullRepository(r *registry.Session, out io.Writer, repoInfo *registry.RepositoryInfo, askedTag string, sf *streamformatter.StreamFormatter, parallel bool) error {
+func (s *TagStore) pullRepository(r *registry.Session, out io.Writer, repoInfo *registry.RepositoryInfo, askedTag string, sf *utils.StreamFormatter, parallel bool) error {
 	out.Write(sf.FormatStatus("", "Pulling repository %s", repoInfo.CanonicalName))
 
 	repoData, err := r.GetRepositoryData(repoInfo.RemoteName)
@@ -116,10 +119,10 @@ func (s *TagStore) pullRepository(r *registry.Session, out io.Writer, repoInfo *
 		return err
 	}
 
-	logrus.Debugf("Retrieving the tag list")
+	log.Debugf("Retrieving the tag list")
 	tagsList, err := r.GetRemoteTags(repoData.Endpoints, repoInfo.RemoteName, repoData.Tokens)
 	if err != nil {
-		logrus.Errorf("unable to get remote tags: %s", err)
+		log.Errorf("unable to get remote tags: %s", err)
 		return err
 	}
 
@@ -131,7 +134,7 @@ func (s *TagStore) pullRepository(r *registry.Session, out io.Writer, repoInfo *
 		}
 	}
 
-	logrus.Debugf("Registering tags")
+	log.Debugf("Registering tags")
 	// If no tag has been specified, pull them all
 	if askedTag == "" {
 		for tag, id := range tagsList {
@@ -148,7 +151,7 @@ func (s *TagStore) pullRepository(r *registry.Session, out io.Writer, repoInfo *
 
 	errors := make(chan error)
 
-	layersDownloaded := false
+	layers_downloaded := false
 	for _, image := range repoData.ImgList {
 		downloadImage := func(img *registry.ImgData) {
 			if askedTag != "" && img.Tag != askedTag {
@@ -159,7 +162,7 @@ func (s *TagStore) pullRepository(r *registry.Session, out io.Writer, repoInfo *
 			}
 
 			if img.Tag == "" {
-				logrus.Debugf("Image (id: %s) present in this repository but untagged, skipping", img.ID)
+				log.Debugf("Image (id: %s) present in this repository but untagged, skipping", img.ID)
 				if parallel {
 					errors <- nil
 				}
@@ -169,11 +172,11 @@ func (s *TagStore) pullRepository(r *registry.Session, out io.Writer, repoInfo *
 			// ensure no two downloads of the same image happen at the same time
 			if c, err := s.poolAdd("pull", "img:"+img.ID); err != nil {
 				if c != nil {
-					out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), "Layer already being pulled by another client. Waiting.", nil))
+					out.Write(sf.FormatProgress(common.TruncateID(img.ID), "Layer already being pulled by another client. Waiting.", nil))
 					<-c
-					out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), "Download complete", nil))
+					out.Write(sf.FormatProgress(common.TruncateID(img.ID), "Download complete", nil))
 				} else {
-					logrus.Debugf("Image (id: %s) pull is already running, skipping: %v", img.ID, err)
+					log.Debugf("Image (id: %s) pull is already running, skipping: %v", img.ID, err)
 				}
 				if parallel {
 					errors <- nil
@@ -182,45 +185,45 @@ func (s *TagStore) pullRepository(r *registry.Session, out io.Writer, repoInfo *
 			}
 			defer s.poolRemove("pull", "img:"+img.ID)
 
-			out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), fmt.Sprintf("Pulling image (%s) from %s", img.Tag, repoInfo.CanonicalName), nil))
+			out.Write(sf.FormatProgress(common.TruncateID(img.ID), fmt.Sprintf("Pulling image (%s) from %s", img.Tag, repoInfo.CanonicalName), nil))
 			success := false
 			var lastErr, err error
-			var isDownloaded bool
+			var is_downloaded bool
 			for _, ep := range repoInfo.Index.Mirrors {
-				out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), fmt.Sprintf("Pulling image (%s) from %s, mirror: %s", img.Tag, repoInfo.CanonicalName, ep), nil))
-				if isDownloaded, err = s.pullImage(r, out, img.ID, ep, repoData.Tokens, sf); err != nil {
+				out.Write(sf.FormatProgress(common.TruncateID(img.ID), fmt.Sprintf("Pulling image (%s) from %s, mirror: %s", img.Tag, repoInfo.CanonicalName, ep), nil))
+				if is_downloaded, err = s.pullImage(r, out, img.ID, ep, repoData.Tokens, sf); err != nil {
 					// Don't report errors when pulling from mirrors.
-					logrus.Debugf("Error pulling image (%s) from %s, mirror: %s, %s", img.Tag, repoInfo.CanonicalName, ep, err)
+					log.Debugf("Error pulling image (%s) from %s, mirror: %s, %s", img.Tag, repoInfo.CanonicalName, ep, err)
 					continue
 				}
-				layersDownloaded = layersDownloaded || isDownloaded
+				layers_downloaded = layers_downloaded || is_downloaded
 				success = true
 				break
 			}
 			if !success {
 				for _, ep := range repoData.Endpoints {
-					out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), fmt.Sprintf("Pulling image (%s) from %s, endpoint: %s", img.Tag, repoInfo.CanonicalName, ep), nil))
-					if isDownloaded, err = s.pullImage(r, out, img.ID, ep, repoData.Tokens, sf); err != nil {
+					out.Write(sf.FormatProgress(common.TruncateID(img.ID), fmt.Sprintf("Pulling image (%s) from %s, endpoint: %s", img.Tag, repoInfo.CanonicalName, ep), nil))
+					if is_downloaded, err = s.pullImage(r, out, img.ID, ep, repoData.Tokens, sf); err != nil {
 						// It's not ideal that only the last error is returned, it would be better to concatenate the errors.
 						// As the error is also given to the output stream the user will see the error.
 						lastErr = err
-						out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), fmt.Sprintf("Error pulling image (%s) from %s, endpoint: %s, %s", img.Tag, repoInfo.CanonicalName, ep, err), nil))
+						out.Write(sf.FormatProgress(common.TruncateID(img.ID), fmt.Sprintf("Error pulling image (%s) from %s, endpoint: %s, %s", img.Tag, repoInfo.CanonicalName, ep, err), nil))
 						continue
 					}
-					layersDownloaded = layersDownloaded || isDownloaded
+					layers_downloaded = layers_downloaded || is_downloaded
 					success = true
 					break
 				}
 			}
 			if !success {
 				err := fmt.Errorf("Error pulling image (%s) from %s, %v", img.Tag, repoInfo.CanonicalName, lastErr)
-				out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), err.Error(), nil))
+				out.Write(sf.FormatProgress(common.TruncateID(img.ID), err.Error(), nil))
 				if parallel {
 					errors <- err
 					return
 				}
 			}
-			out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), "Download complete", nil))
+			out.Write(sf.FormatProgress(common.TruncateID(img.ID), "Download complete", nil))
 
 			if parallel {
 				errors <- nil
@@ -258,32 +261,32 @@ func (s *TagStore) pullRepository(r *registry.Session, out io.Writer, repoInfo *
 	if len(askedTag) > 0 {
 		requestedTag = utils.ImageReference(repoInfo.CanonicalName, askedTag)
 	}
-	WriteStatus(requestedTag, out, sf, layersDownloaded)
+	WriteStatus(requestedTag, out, sf, layers_downloaded)
 	return nil
 }
 
-func (s *TagStore) pullImage(r *registry.Session, out io.Writer, imgID, endpoint string, token []string, sf *streamformatter.StreamFormatter) (bool, error) {
+func (s *TagStore) pullImage(r *registry.Session, out io.Writer, imgID, endpoint string, token []string, sf *utils.StreamFormatter) (bool, error) {
 	history, err := r.GetRemoteHistory(imgID, endpoint, token)
 	if err != nil {
 		return false, err
 	}
-	out.Write(sf.FormatProgress(stringid.TruncateID(imgID), "Pulling dependent layers", nil))
+	out.Write(sf.FormatProgress(common.TruncateID(imgID), "Pulling dependent layers", nil))
 	// FIXME: Try to stream the images?
 	// FIXME: Launch the getRemoteImage() in goroutines
 
-	layersDownloaded := false
+	layers_downloaded := false
 	for i := len(history) - 1; i >= 0; i-- {
 		id := history[i]
 
 		// ensure no two downloads of the same layer happen at the same time
 		if c, err := s.poolAdd("pull", "layer:"+id); err != nil {
-			logrus.Debugf("Image (id: %s) pull is already running, skipping: %v", id, err)
+			log.Debugf("Image (id: %s) pull is already running, skipping: %v", id, err)
 			<-c
 		}
 		defer s.poolRemove("pull", "layer:"+id)
 
 		if !s.graph.Exists(id) {
-			out.Write(sf.FormatProgress(stringid.TruncateID(id), "Pulling metadata", nil))
+			out.Write(sf.FormatProgress(common.TruncateID(id), "Pulling metadata", nil))
 			var (
 				imgJSON []byte
 				imgSize int
@@ -294,17 +297,17 @@ func (s *TagStore) pullImage(r *registry.Session, out io.Writer, imgID, endpoint
 			for j := 1; j <= retries; j++ {
 				imgJSON, imgSize, err = r.GetRemoteImageJSON(id, endpoint, token)
 				if err != nil && j == retries {
-					out.Write(sf.FormatProgress(stringid.TruncateID(id), "Error pulling dependent layers", nil))
-					return layersDownloaded, err
+					out.Write(sf.FormatProgress(common.TruncateID(id), "Error pulling dependent layers", nil))
+					return layers_downloaded, err
 				} else if err != nil {
 					time.Sleep(time.Duration(j) * 500 * time.Millisecond)
 					continue
 				}
 				img, err = image.NewImgJSON(imgJSON)
-				layersDownloaded = true
+				layers_downloaded = true
 				if err != nil && j == retries {
-					out.Write(sf.FormatProgress(stringid.TruncateID(id), "Error pulling dependent layers", nil))
-					return layersDownloaded, fmt.Errorf("Failed to parse json: %s", err)
+					out.Write(sf.FormatProgress(common.TruncateID(id), "Error pulling dependent layers", nil))
+					return layers_downloaded, fmt.Errorf("Failed to parse json: %s", err)
 				} else if err != nil {
 					time.Sleep(time.Duration(j) * 500 * time.Millisecond)
 					continue
@@ -319,7 +322,7 @@ func (s *TagStore) pullImage(r *registry.Session, out io.Writer, imgID, endpoint
 				if j > 1 {
 					status = fmt.Sprintf("Pulling fs layer [retries: %d]", j)
 				}
-				out.Write(sf.FormatProgress(stringid.TruncateID(id), status, nil))
+				out.Write(sf.FormatProgress(common.TruncateID(id), status, nil))
 				layer, err := r.GetRemoteImageLayer(img.ID, endpoint, token, int64(imgSize))
 				if uerr, ok := err.(*url.Error); ok {
 					err = uerr.Err
@@ -328,10 +331,10 @@ func (s *TagStore) pullImage(r *registry.Session, out io.Writer, imgID, endpoint
 					time.Sleep(time.Duration(j) * 500 * time.Millisecond)
 					continue
 				} else if err != nil {
-					out.Write(sf.FormatProgress(stringid.TruncateID(id), "Error pulling dependent layers", nil))
-					return layersDownloaded, err
+					out.Write(sf.FormatProgress(common.TruncateID(id), "Error pulling dependent layers", nil))
+					return layers_downloaded, err
 				}
-				layersDownloaded = true
+				layers_downloaded = true
 				defer layer.Close()
 
 				err = s.graph.Register(img,
@@ -341,27 +344,27 @@ func (s *TagStore) pullImage(r *registry.Session, out io.Writer, imgID, endpoint
 						Formatter: sf,
 						Size:      imgSize,
 						NewLines:  false,
-						ID:        stringid.TruncateID(id),
+						ID:        common.TruncateID(id),
 						Action:    "Downloading",
 					}))
 				if terr, ok := err.(net.Error); ok && terr.Timeout() && j < retries {
 					time.Sleep(time.Duration(j) * 500 * time.Millisecond)
 					continue
 				} else if err != nil {
-					out.Write(sf.FormatProgress(stringid.TruncateID(id), "Error downloading dependent layers", nil))
-					return layersDownloaded, err
+					out.Write(sf.FormatProgress(common.TruncateID(id), "Error downloading dependent layers", nil))
+					return layers_downloaded, err
 				} else {
 					break
 				}
 			}
 		}
-		out.Write(sf.FormatProgress(stringid.TruncateID(id), "Download complete", nil))
+		out.Write(sf.FormatProgress(common.TruncateID(id), "Download complete", nil))
 	}
-	return layersDownloaded, nil
+	return layers_downloaded, nil
 }
 
-func WriteStatus(requestedTag string, out io.Writer, sf *streamformatter.StreamFormatter, layersDownloaded bool) {
-	if layersDownloaded {
+func WriteStatus(requestedTag string, out io.Writer, sf *utils.StreamFormatter, layers_downloaded bool) {
+	if layers_downloaded {
 		out.Write(sf.FormatStatus("", "Status: Downloaded newer image for %s", requestedTag))
 	} else {
 		out.Write(sf.FormatStatus("", "Status: Image is up to date for %s", requestedTag))
@@ -379,11 +382,11 @@ type downloadInfo struct {
 	err        chan error
 }
 
-func (s *TagStore) pullV2Repository(eng *engine.Engine, r *registry.Session, out io.Writer, repoInfo *registry.RepositoryInfo, tag string, sf *streamformatter.StreamFormatter, parallel bool) error {
+func (s *TagStore) pullV2Repository(eng *engine.Engine, r *registry.Session, out io.Writer, repoInfo *registry.RepositoryInfo, tag string, sf *utils.StreamFormatter, parallel bool) error {
 	endpoint, err := r.V2RegistryEndpoint(repoInfo.Index)
 	if err != nil {
 		if repoInfo.Index.Official {
-			logrus.Debugf("Unable to pull from V2 registry, falling back to v1: %s", err)
+			log.Debugf("Unable to pull from V2 registry, falling back to v1: %s", err)
 			return ErrV2RegistryUnavailable
 		}
 		return fmt.Errorf("error getting registry endpoint: %s", err)
@@ -394,7 +397,7 @@ func (s *TagStore) pullV2Repository(eng *engine.Engine, r *registry.Session, out
 	}
 	var layersDownloaded bool
 	if tag == "" {
-		logrus.Debugf("Pulling tag list from V2 registry for %s", repoInfo.CanonicalName)
+		log.Debugf("Pulling tag list from V2 registry for %s", repoInfo.CanonicalName)
 		tags, err := r.GetV2RemoteTags(endpoint, repoInfo.RemoteName, auth)
 		if err != nil {
 			return err
@@ -425,8 +428,8 @@ func (s *TagStore) pullV2Repository(eng *engine.Engine, r *registry.Session, out
 	return nil
 }
 
-func (s *TagStore) pullV2Tag(eng *engine.Engine, r *registry.Session, out io.Writer, endpoint *registry.Endpoint, repoInfo *registry.RepositoryInfo, tag string, sf *streamformatter.StreamFormatter, parallel bool, auth *registry.RequestAuthorization) (bool, error) {
-	logrus.Debugf("Pulling tag from V2 registry: %q", tag)
+func (s *TagStore) pullV2Tag(eng *engine.Engine, r *registry.Session, out io.Writer, endpoint *registry.Endpoint, repoInfo *registry.RepositoryInfo, tag string, sf *utils.StreamFormatter, parallel bool, auth *registry.RequestAuthorization) (bool, error) {
+	log.Debugf("Pulling tag from V2 registry: %q", tag)
 
 	manifestBytes, manifestDigest, err := r.GetV2ImageManifest(endpoint, repoInfo.RemoteName, tag, auth)
 	if err != nil {
@@ -445,7 +448,7 @@ func (s *TagStore) pullV2Tag(eng *engine.Engine, r *registry.Session, out io.Wri
 	}
 
 	if verified {
-		logrus.Printf("Image manifest for %s has been verified", utils.ImageReference(repoInfo.CanonicalName, tag))
+		log.Printf("Image manifest for %s has been verified", utils.ImageReference(repoInfo.CanonicalName, tag))
 	}
 	out.Write(sf.FormatStatus(tag, "Pulling from %s", repoInfo.CanonicalName))
 
@@ -465,7 +468,7 @@ func (s *TagStore) pullV2Tag(eng *engine.Engine, r *registry.Session, out io.Wri
 
 		// Check if exists
 		if s.graph.Exists(img.ID) {
-			logrus.Debugf("Image already exists: %s", img.ID)
+			log.Debugf("Image already exists: %s", img.ID)
 			continue
 		}
 
@@ -475,18 +478,18 @@ func (s *TagStore) pullV2Tag(eng *engine.Engine, r *registry.Session, out io.Wri
 		}
 		downloads[i].digest = dgst
 
-		out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), "Pulling fs layer", nil))
+		out.Write(sf.FormatProgress(common.TruncateID(img.ID), "Pulling fs layer", nil))
 
 		downloadFunc := func(di *downloadInfo) error {
-			logrus.Debugf("pulling blob %q to V1 img %s", sumStr, img.ID)
+			log.Debugf("pulling blob %q to V1 img %s", sumStr, img.ID)
 
 			if c, err := s.poolAdd("pull", "img:"+img.ID); err != nil {
 				if c != nil {
-					out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), "Layer already being pulled by another client. Waiting.", nil))
+					out.Write(sf.FormatProgress(common.TruncateID(img.ID), "Layer already being pulled by another client. Waiting.", nil))
 					<-c
-					out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), "Download complete", nil))
+					out.Write(sf.FormatProgress(common.TruncateID(img.ID), "Download complete", nil))
 				} else {
-					logrus.Debugf("Image (id: %s) pull is already running, skipping: %v", img.ID, err)
+					log.Debugf("Image (id: %s) pull is already running, skipping: %v", img.ID, err)
 				}
 			} else {
 				defer s.poolRemove("pull", "img:"+img.ID)
@@ -495,7 +498,7 @@ func (s *TagStore) pullV2Tag(eng *engine.Engine, r *registry.Session, out io.Wri
 					return err
 				}
 
-				r, l, err := r.GetV2ImageBlobReader(endpoint, repoInfo.RemoteName, di.digest, auth)
+				r, l, err := r.GetV2ImageBlobReader(endpoint, repoInfo.RemoteName, di.digest.Algorithm(), di.digest.Hex(), auth)
 				if err != nil {
 					return err
 				}
@@ -512,22 +515,22 @@ func (s *TagStore) pullV2Tag(eng *engine.Engine, r *registry.Session, out io.Wri
 					Formatter: sf,
 					Size:      int(l),
 					NewLines:  false,
-					ID:        stringid.TruncateID(img.ID),
+					ID:        common.TruncateID(img.ID),
 					Action:    "Downloading",
 				})); err != nil {
 					return fmt.Errorf("unable to copy v2 image blob data: %s", err)
 				}
 
-				out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), "Verifying Checksum", nil))
+				out.Write(sf.FormatProgress(common.TruncateID(img.ID), "Verifying Checksum", nil))
 
 				if !verifier.Verified() {
-					logrus.Infof("Image verification failed: checksum mismatch for %q", di.digest.String())
+					log.Infof("Image verification failed: checksum mismatch for %q", di.digest.String())
 					verified = false
 				}
 
-				out.Write(sf.FormatProgress(stringid.TruncateID(img.ID), "Download complete", nil))
+				out.Write(sf.FormatProgress(common.TruncateID(img.ID), "Download complete", nil))
 
-				logrus.Debugf("Downloaded %s to tempfile %s", img.ID, tmpFile.Name())
+				log.Debugf("Downloaded %s to tempfile %s", img.ID, tmpFile.Name())
 				di.tmpFile = tmpFile
 				di.length = l
 				di.downloaded = true
@@ -571,7 +574,7 @@ func (s *TagStore) pullV2Tag(eng *engine.Engine, r *registry.Session, out io.Wri
 						Out:       out,
 						Formatter: sf,
 						Size:      int(d.length),
-						ID:        stringid.TruncateID(d.img.ID),
+						ID:        common.TruncateID(d.img.ID),
 						Action:    "Extracting",
 					}))
 				if err != nil {
@@ -580,10 +583,10 @@ func (s *TagStore) pullV2Tag(eng *engine.Engine, r *registry.Session, out io.Wri
 
 				// FIXME: Pool release here for parallel tag pull (ensures any downloads block until fully extracted)
 			}
-			out.Write(sf.FormatProgress(stringid.TruncateID(d.img.ID), "Pull complete", nil))
+			out.Write(sf.FormatProgress(common.TruncateID(d.img.ID), "Pull complete", nil))
 			tagUpdated = true
 		} else {
-			out.Write(sf.FormatProgress(stringid.TruncateID(d.img.ID), "Already exists", nil))
+			out.Write(sf.FormatProgress(common.TruncateID(d.img.ID), "Already exists", nil))
 		}
 
 	}
@@ -598,8 +601,6 @@ func (s *TagStore) pullV2Tag(eng *engine.Engine, r *registry.Session, out io.Wri
 			if _, exists := repo[tag]; !exists {
 				tagUpdated = true
 			}
-		} else {
-			tagUpdated = true
 		}
 	}
 

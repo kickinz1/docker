@@ -33,7 +33,7 @@ func TestNetworkNat(t *testing.T) {
 		t.Fatal(out, err)
 	}
 
-	cleanedContainerID := strings.TrimSpace(out)
+	cleanedContainerID := stripTrailingCharacters(out)
 
 	runCmd = exec.Command(dockerBinary, "run", "busybox", "sh", "-c", fmt.Sprintf("echo hello world | nc -w 30 %s 8080", ifaceIP))
 	out, _, err = runCommandWithOutput(runCmd)

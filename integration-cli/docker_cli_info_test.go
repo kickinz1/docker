@@ -14,18 +14,7 @@ func TestInfoEnsureSucceeds(t *testing.T) {
 		t.Fatalf("failed to execute docker info: %s, %v", out, err)
 	}
 
-	// always shown fields
-	stringsToCheck := []string{
-		"ID:",
-		"Containers:",
-		"Images:",
-		"Execution Driver:",
-		"Logging Driver:",
-		"Operating System:",
-		"CPUs:",
-		"Total Memory:",
-		"Kernel Version:",
-		"Storage Driver:"}
+	stringsToCheck := []string{"Containers:", "Execution Driver:", "Kernel Version:"}
 
 	for _, linePrefix := range stringsToCheck {
 		if !strings.Contains(out, linePrefix) {

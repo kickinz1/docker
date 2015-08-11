@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/graphdriver"
-	"github.com/docker/docker/pkg/stringid"
+	"github.com/docker/docker/pkg/common"
 )
 
 type Repository struct {
@@ -43,7 +43,7 @@ func (r *Repository) newVolume(path string, writable bool) (*Volume, error) {
 	var (
 		isBindMount bool
 		err         error
-		id          = stringid.GenerateRandomID()
+		id          = common.GenerateRandomID()
 	)
 	if path != "" {
 		isBindMount = true
@@ -77,8 +77,7 @@ func (r *Repository) newVolume(path string, writable bool) (*Volume, error) {
 		return nil, err
 	}
 
-	r.add(v)
-	return v, nil
+	return v, r.add(v)
 }
 
 func (r *Repository) restore() error {
@@ -96,15 +95,17 @@ func (r *Repository) restore() error {
 		}
 		if err := vol.FromDisk(); err != nil {
 			if !os.IsNotExist(err) {
-				logrus.Debugf("Error restoring volume: %v", err)
+				log.Debugf("Error restoring volume: %v", err)
 				continue
 			}
 			if err := vol.initialize(); err != nil {
-				logrus.Debugf("%s", err)
+				log.Debugf("%s", err)
 				continue
 			}
 		}
-		r.add(vol)
+		if err := r.add(vol); err != nil {
+			log.Debugf("Error restoring volume: %v", err)
+		}
 	}
 	return nil
 }
@@ -124,11 +125,12 @@ func (r *Repository) get(path string) *Volume {
 	return r.volumes[filepath.Clean(path)]
 }
 
-func (r *Repository) add(volume *Volume) {
+func (r *Repository) add(volume *Volume) error {
 	if vol := r.get(volume.Path); vol != nil {
-		return
+		return fmt.Errorf("Volume exists: %s", volume.ID)
 	}
 	r.volumes[volume.Path] = volume
+	return nil
 }
 
 func (r *Repository) Delete(path string) error {

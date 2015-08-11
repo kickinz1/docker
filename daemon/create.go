@@ -12,22 +12,22 @@ import (
 	"github.com/docker/libcontainer/label"
 )
 
-func (daemon *Daemon) ContainerCreate(job *engine.Job) error {
+func (daemon *Daemon) ContainerCreate(job *engine.Job) engine.Status {
 	var name string
 	if len(job.Args) == 1 {
 		name = job.Args[0]
 	} else if len(job.Args) > 1 {
-		return fmt.Errorf("Usage: %s", job.Name)
+		return job.Errorf("Usage: %s", job.Name)
 	}
 
 	config := runconfig.ContainerConfigFromJob(job)
 	hostConfig := runconfig.ContainerHostConfigFromJob(job)
 
 	if len(hostConfig.LxcConf) > 0 && !strings.Contains(daemon.ExecutionDriver().Name(), "lxc") {
-		return fmt.Errorf("Cannot use --lxc-conf with execdriver: %s", daemon.ExecutionDriver().Name())
+		return job.Errorf("Cannot use --lxc-conf with execdriver: %s", daemon.ExecutionDriver().Name())
 	}
 	if hostConfig.Memory != 0 && hostConfig.Memory < 4194304 {
-		return fmt.Errorf("Minimum memory limit allowed is 4MB")
+		return job.Errorf("Minimum memory limit allowed is 4MB")
 	}
 	if hostConfig.Memory > 0 && !daemon.SystemConfig().MemoryLimit {
 		job.Errorf("Your kernel does not support memory limit capabilities. Limitation discarded.\n")
@@ -38,22 +38,22 @@ func (daemon *Daemon) ContainerCreate(job *engine.Job) error {
 		hostConfig.MemorySwap = -1
 	}
 	if hostConfig.Memory > 0 && hostConfig.MemorySwap > 0 && hostConfig.MemorySwap < hostConfig.Memory {
-		return fmt.Errorf("Minimum memoryswap limit should be larger than memory limit, see usage.\n")
+		return job.Errorf("Minimum memoryswap limit should be larger than memory limit, see usage.\n")
 	}
 	if hostConfig.Memory == 0 && hostConfig.MemorySwap > 0 {
-		return fmt.Errorf("You should always set the Memory limit when using Memoryswap limit, see usage.\n")
+		return job.Errorf("You should always set the Memory limit when using Memoryswap limit, see usage.\n")
 	}
 
 	container, buildWarnings, err := daemon.Create(config, hostConfig, name)
 	if err != nil {
-		if daemon.Graph().IsNotExist(err, config.Image) {
+		if daemon.Graph().IsNotExist(err) {
 			_, tag := parsers.ParseRepositoryTag(config.Image)
 			if tag == "" {
 				tag = graph.DEFAULTTAG
 			}
-			return fmt.Errorf("No such image: %s (tag: %s)", config.Image, tag)
+			return job.Errorf("No such image: %s (tag: %s)", config.Image, tag)
 		}
-		return err
+		return job.Error(err)
 	}
 	if !container.Config.NetworkDisabled && daemon.SystemConfig().IPv4ForwardingDisabled {
 		job.Errorf("IPv4 forwarding is disabled.\n")
@@ -66,7 +66,7 @@ func (daemon *Daemon) ContainerCreate(job *engine.Job) error {
 		job.Errorf("%s\n", warning)
 	}
 
-	return nil
+	return engine.StatusOK
 }
 
 // Create creates a new container from the given configuration with a given name.

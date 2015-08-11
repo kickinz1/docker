@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/docker/pkg/stringid"
+	"github.com/docker/docker/pkg/common"
 )
 
 func TestImagesEnsureImageIsListed(t *testing.T) {
@@ -196,7 +196,7 @@ func TestImagesEnsureDanglingImageOnlyListedOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error tagging foobox: %s", err)
 	}
-	imageId := stringid.TruncateID(strings.TrimSpace(out))
+	imageId := common.TruncateID(strings.TrimSpace(out))
 	defer deleteImages(imageId)
 
 	// overwrite the tag, making the previous image dangling

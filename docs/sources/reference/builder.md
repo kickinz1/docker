@@ -26,7 +26,7 @@ This file will describe the steps to assemble the image.
 Then call `docker build` with the path of your source repository as the argument
 (for example, `.`):
 
-    $ docker build .
+    $ sudo docker build .
 
 The path to the source repository defines where to find the *context* of
 the build. The build is run by the Docker daemon, not by the CLI, so the
@@ -49,7 +49,7 @@ directory.
 You can specify a repository and tag at which to save the new image if
 the build succeeds:
 
-    $ docker build -t shykes/myapp .
+    $ sudo docker build -t shykes/myapp .
 
 The Docker daemon will run your steps one-by-one, committing the result
 to a new image if necessary, before finally outputting the ID of your
@@ -65,7 +65,7 @@ accelerating `docker build` significantly (indicated by `Using cache` -
 see the [`Dockerfile` Best Practices
 guide](/articles/dockerfile_best-practices/#build-cache) for more information):
 
-    $ docker build -t SvenDowideit/ambassador .
+    $ sudo docker build -t SvenDowideit/ambassador .
     Uploading context 10.24 kB
     Uploading context
     Step 1 : FROM docker-ut
@@ -113,30 +113,18 @@ images.
 > replacement at the time. After 1.3 this behavior will be preserved and
 > canonical.
 
-Environment variables (declared with [the `ENV` statement](#env)) can also be
-used in certain instructions as variables to be interpreted by the
-`Dockerfile`. Escapes are also handled for including variable-like syntax
-into a statement literally.
+Environment variables (declared with [the `ENV` statement](#env)) can also be used in
+certain instructions as variables to be interpreted by the `Dockerfile`. Escapes
+are also handled for including variable-like syntax into a statement literally.
 
 Environment variables are notated in the `Dockerfile` either with
 `$variable_name` or `${variable_name}`. They are treated equivalently and the
 brace syntax is typically used to address issues with variable names with no
 whitespace, like `${foo}_bar`.
 
-The `${variable_name}` syntax also supports a few of the standard `bash`
-modifiers as specified below:
-
-* `${variable:-word}` indicates that if `variable` is set then the result
-  will be that value. If `variable` is not set then `word` will be the result.
-* `${variable:+word}` indiates that if `variable` is set then `word` will be
-  the result, otherwise the result is the empty string.
-
-In all cases, `word` can be any string, including additional environment
-variables.
-
 Escaping is possible by adding a `\` before the variable: `\$foo` or `\${foo}`,
 for example, will translate to `$foo` and `${foo}` literals respectively.
-
+ 
 Example (parsed representation is displayed after the `#`):
 
     FROM busybox
@@ -187,7 +175,7 @@ The following example shows the use of the `.dockerignore` file to exclude the
 `.git` directory from the context. Its effect can be seen in the changed size of
 the uploaded context.
 
-    $ docker build .
+    $ sudo docker build .
     Uploading context 18.829 MB
     Uploading context
     Step 0 : FROM busybox
@@ -197,7 +185,7 @@ the uploaded context.
      ---> 99cc1ad10469
     Successfully built 99cc1ad10469
     $ echo ".git" > .dockerignore
-    $ docker build .
+    $ sudo docker build .
     Uploading context  6.76 MB
     Uploading context
     Step 0 : FROM busybox

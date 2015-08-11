@@ -17,15 +17,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/autogen/dockerversion"
 	"github.com/docker/docker/engine"
-	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/signal"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/docker/pkg/term"
 	"github.com/docker/docker/registry"
+	"github.com/docker/docker/utils"
 )
 
 var (
@@ -68,13 +68,11 @@ func (cli *DockerCli) clientRequest(method, path string, in io.Reader, headers m
 	req.Header.Set("User-Agent", "Docker-Client/"+dockerversion.VERSION)
 	req.URL.Host = cli.addr
 	req.URL.Scheme = cli.scheme
-
 	if headers != nil {
 		for k, v := range headers {
 			req.Header[k] = v
 		}
 	}
-
 	if expectedPayload && req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "text/plain")
 	}
@@ -92,6 +90,7 @@ func (cli *DockerCli) clientRequest(method, path string, in io.Reader, headers m
 		if cli.tlsConfig == nil {
 			return nil, "", statusCode, fmt.Errorf("%v. Are you trying to connect to a TLS-enabled daemon without TLS?", err)
 		}
+
 		return nil, "", statusCode, fmt.Errorf("An error occurred trying to connect: %v", err)
 	}
 
@@ -170,7 +169,6 @@ func (cli *DockerCli) call(method, path string, data interface{}, headers map[st
 	body, _, statusCode, err := cli.clientRequest(method, path, params, headers)
 	return body, statusCode, err
 }
-
 func (cli *DockerCli) stream(method, path string, in io.Reader, out io.Writer, headers map[string][]string) error {
 	return cli.streamHelper(method, path, true, in, out, nil, headers)
 }
@@ -187,7 +185,7 @@ func (cli *DockerCli) streamBody(body io.ReadCloser, contentType string, setRawT
 	defer body.Close()
 
 	if api.MatchesContentType(contentType, "application/json") {
-		return jsonmessage.DisplayJSONMessagesStream(body, stdout, cli.outFd, cli.isTerminalOut)
+		return utils.DisplayJSONMessagesStream(body, stdout, cli.outFd, cli.isTerminalOut)
 	}
 	if stdout != nil || stderr != nil {
 		// When TTY is ON, use regular copy
@@ -197,7 +195,7 @@ func (cli *DockerCli) streamBody(body io.ReadCloser, contentType string, setRawT
 		} else {
 			_, err = stdcopy.StdCopy(stdout, stderr, body)
 		}
-		logrus.Debugf("[stream] End of stdout")
+		log.Debugf("[stream] End of stdout")
 		return err
 	}
 	return nil
@@ -220,7 +218,7 @@ func (cli *DockerCli) resizeTty(id string, isExec bool) {
 	}
 
 	if _, _, err := readBody(cli.call("POST", path+v.Encode(), nil, nil)); err != nil {
-		logrus.Debugf("Error resize: %s", err)
+		log.Debugf("Error resize: %s", err)
 	}
 }
 
@@ -313,7 +311,7 @@ func (cli *DockerCli) getTtySize() (int, int) {
 	}
 	ws, err := term.GetWinsize(cli.outFd)
 	if err != nil {
-		logrus.Debugf("Error getting size: %s", err)
+		log.Debugf("Error getting size: %s", err)
 		if ws == nil {
 			return 0, 0
 		}

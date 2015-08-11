@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/docker/pkg/stringutils"
+	"github.com/docker/docker/pkg/testutils"
 )
 
 func TestEnvLenZero(t *testing.T) {
@@ -75,26 +75,6 @@ func TestSetenv(t *testing.T) {
 	}
 	if val := job.Getenv("nonexistent"); val != "" {
 		t.Fatalf("Getenv returns incorrect value: %s", val)
-	}
-}
-
-func TestDecodeEnv(t *testing.T) {
-	job := mkJob(t, "dummy")
-	type tmp struct {
-		Id1 int64
-		Id2 int64
-	}
-	body := []byte("{\"tags\":{\"Id1\":123, \"Id2\":1234567}}")
-	if err := job.DecodeEnv(bytes.NewBuffer(body)); err != nil {
-		t.Fatalf("DecodeEnv failed: %v", err)
-	}
-	mytag := tmp{}
-	if val := job.GetenvJson("tags", &mytag); val != nil {
-		t.Fatalf("GetenvJson returns incorrect value: %s", val)
-	}
-
-	if mytag.Id1 != 123 || mytag.Id2 != 1234567 {
-		t.Fatal("Get wrong values set by job.DecodeEnv")
 	}
 }
 
@@ -205,7 +185,7 @@ func TestMultiMap(t *testing.T) {
 func testMap(l int) [][2]string {
 	res := make([][2]string, l)
 	for i := 0; i < l; i++ {
-		t := [2]string{stringutils.GenerateRandomAsciiString(5), stringutils.GenerateRandomAsciiString(20)}
+		t := [2]string{testutils.RandomString(5), testutils.RandomString(20)}
 		res[i] = t
 	}
 	return res

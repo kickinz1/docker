@@ -1,14 +1,12 @@
 package daemon
 
 import (
-	"fmt"
-
 	"github.com/docker/docker/engine"
 )
 
-func (daemon *Daemon) ContainerRestart(job *engine.Job) error {
+func (daemon *Daemon) ContainerRestart(job *engine.Job) engine.Status {
 	if len(job.Args) != 1 {
-		return fmt.Errorf("Usage: %s CONTAINER\n", job.Name)
+		return job.Errorf("Usage: %s CONTAINER\n", job.Name)
 	}
 	var (
 		name = job.Args[0]
@@ -19,11 +17,11 @@ func (daemon *Daemon) ContainerRestart(job *engine.Job) error {
 	}
 	container, err := daemon.Get(name)
 	if err != nil {
-		return err
+		return job.Error(err)
 	}
 	if err := container.Restart(int(t)); err != nil {
-		return fmt.Errorf("Cannot restart container %s: %s\n", name, err)
+		return job.Errorf("Cannot restart container %s: %s\n", name, err)
 	}
 	container.LogEvent("restart")
-	return nil
+	return engine.StatusOK
 }

@@ -45,9 +45,9 @@ func TestJob(t *testing.T) {
 		t.Fatalf("job1.handler should be empty")
 	}
 
-	h := func(j *Job) error {
+	h := func(j *Job) Status {
 		j.Printf("%s\n", j.Name)
-		return nil
+		return 42
 	}
 
 	eng.Register("dummy2", h)
@@ -58,7 +58,7 @@ func TestJob(t *testing.T) {
 		t.Fatalf("job2.handler shouldn't be nil")
 	}
 
-	if job2.handler(job2) != nil {
+	if job2.handler(job2) != 42 {
 		t.Fatalf("handler dummy2 was not found in job2")
 	}
 }
@@ -76,7 +76,7 @@ func TestEngineShutdown(t *testing.T) {
 
 func TestEngineCommands(t *testing.T) {
 	eng := New()
-	handler := func(job *Job) error { return nil }
+	handler := func(job *Job) Status { return StatusOK }
 	eng.Register("foo", handler)
 	eng.Register("bar", handler)
 	eng.Register("echo", handler)
@@ -105,9 +105,9 @@ func TestParseJob(t *testing.T) {
 	eng := New()
 	// Verify that the resulting job calls to the right place
 	var called bool
-	eng.Register("echo", func(job *Job) error {
+	eng.Register("echo", func(job *Job) Status {
 		called = true
-		return nil
+		return StatusOK
 	})
 	input := "echo DEBUG=1 hello world VERBOSITY=42"
 	job, err := eng.ParseJob(input)
@@ -140,9 +140,9 @@ func TestParseJob(t *testing.T) {
 func TestCatchallEmptyName(t *testing.T) {
 	eng := New()
 	var called bool
-	eng.RegisterCatchall(func(job *Job) error {
+	eng.RegisterCatchall(func(job *Job) Status {
 		called = true
-		return nil
+		return StatusOK
 	})
 	err := eng.Job("").Run()
 	if err == nil {
@@ -164,7 +164,7 @@ func TestNestedJobSharedOutput(t *testing.T) {
 		wrapOutput   bool
 	)
 
-	outerHandler = func(job *Job) error {
+	outerHandler = func(job *Job) Status {
 		job.Stdout.Write([]byte("outer1"))
 
 		innerJob := job.Eng.Job("innerJob")
@@ -184,13 +184,13 @@ func TestNestedJobSharedOutput(t *testing.T) {
 		// closed output.
 		job.Stdout.Write([]byte(" outer2"))
 
-		return nil
+		return StatusOK
 	}
 
-	innerHandler = func(job *Job) error {
+	innerHandler = func(job *Job) Status {
 		job.Stdout.Write([]byte(" inner"))
 
-		return nil
+		return StatusOK
 	}
 
 	eng := New()

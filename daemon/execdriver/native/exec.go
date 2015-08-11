@@ -14,6 +14,7 @@ import (
 	"github.com/docker/libcontainer/utils"
 )
 
+// TODO(vishh): Add support for running in priviledged mode and running as a different user.
 func (d *driver) Exec(c *execdriver.Command, processConfig *execdriver.ProcessConfig, pipes *execdriver.Pipes, startCallback execdriver.StartCallback) (int, error) {
 	active := d.activeContainers[c.ID]
 	if active == nil {
@@ -27,11 +28,7 @@ func (d *driver) Exec(c *execdriver.Command, processConfig *execdriver.ProcessCo
 		Args: append([]string{processConfig.Entrypoint}, processConfig.Arguments...),
 		Env:  c.ProcessConfig.Env,
 		Cwd:  c.WorkingDir,
-		User: processConfig.User,
-	}
-
-	if processConfig.Privileged {
-		p.Capabilities = execdriver.GetAllCapabilities()
+		User: c.ProcessConfig.User,
 	}
 
 	if processConfig.Tty {

@@ -5,7 +5,7 @@ package graphdriver
 import (
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/chrootarchive"
 	"github.com/docker/docker/pkg/ioutils"
@@ -120,11 +120,11 @@ func (gdw *naiveDiffDriver) ApplyDiff(id, parent string, diff archive.ArchiveRea
 	defer driver.Put(id)
 
 	start := time.Now().UTC()
-	logrus.Debugf("Start untar layer")
+	log.Debugf("Start untar layer")
 	if size, err = chrootarchive.ApplyLayer(layerFs, diff); err != nil {
 		return
 	}
-	logrus.Debugf("Untar time: %vs", time.Now().UTC().Sub(start).Seconds())
+	log.Debugf("Untar time: %vs", time.Now().UTC().Sub(start).Seconds())
 
 	return
 }

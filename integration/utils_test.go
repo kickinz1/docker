@@ -16,12 +16,9 @@ import (
 
 	"github.com/docker/docker/vendor/src/code.google.com/p/go/src/pkg/archive/tar"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/builtins"
 	"github.com/docker/docker/daemon"
-	"github.com/docker/docker/daemon/networkdriver/bridge"
 	"github.com/docker/docker/engine"
-	"github.com/docker/docker/graph"
 	flag "github.com/docker/docker/pkg/mflag"
 	"github.com/docker/docker/registry"
 	"github.com/docker/docker/runconfig"
@@ -105,7 +102,7 @@ func containerWaitTimeout(eng *engine.Engine, id string, t Fataler) error {
 }
 
 func containerKill(eng *engine.Engine, id string, t Fataler) {
-	if err := getDaemon(eng).ContainerKill(id, 0); err != nil {
+	if err := eng.Job("kill", id).Run(); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -153,7 +150,7 @@ func getContainer(eng *engine.Engine, id string, t Fataler) *daemon.Container {
 }
 
 func mkDaemonFromEngine(eng *engine.Engine, t Fataler) *daemon.Daemon {
-	iDaemon := eng.HackGetGlobalVar("httpapi.daemon")
+	iDaemon := eng.Hack_GetGlobalVar("httpapi.daemon")
 	if iDaemon == nil {
 		panic("Legacy daemon field not set in engine")
 	}
@@ -180,6 +177,10 @@ func newTestEngine(t Fataler, autorestart bool, root string) *engine.Engine {
 	if err := builtins.Register(eng); err != nil {
 		t.Fatal(err)
 	}
+	// load registry service
+	if err := registry.NewService(nil).Install(eng); err != nil {
+		t.Fatal(err)
+	}
 
 	// (This is manually copied and modified from main() until we have a more generic plugin system)
 	cfg := &daemon.Config{
@@ -188,13 +189,11 @@ func newTestEngine(t Fataler, autorestart bool, root string) *engine.Engine {
 		ExecDriver:  "native",
 		// Either InterContainerCommunication or EnableIptables must be set,
 		// otherwise NewDaemon will fail because of conflicting settings.
-		Bridge: bridge.Config{
-			InterContainerCommunication: true,
-		},
-		TrustKeyPath: filepath.Join(root, "key.json"),
-		LogConfig:    runconfig.LogConfig{Type: "json-file"},
+		InterContainerCommunication: true,
+		TrustKeyPath:                filepath.Join(root, "key.json"),
+		LogConfig:                   runconfig.LogConfig{Type: "json-file"},
 	}
-	d, err := daemon.NewDaemon(cfg, eng, registry.NewService(nil))
+	d, err := daemon.NewDaemon(cfg, eng)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,17 +333,23 @@ func fakeTar() (io.ReadCloser, error) {
 	return ioutil.NopCloser(buf), nil
 }
 
-func getImages(eng *engine.Engine, t *testing.T, all bool, filter string) []*types.Image {
-	config := graph.ImagesConfig{
-		Filter: filter,
-		All:    all,
-	}
-	images, err := getDaemon(eng).Repositories().Images(&config)
+func getAllImages(eng *engine.Engine, t *testing.T) *engine.Table {
+	return getImages(eng, t, true, "")
+}
+
+func getImages(eng *engine.Engine, t *testing.T, all bool, filter string) *engine.Table {
+	job := eng.Job("images")
+	job.SetenvBool("all", all)
+	job.Setenv("filter", filter)
+	images, err := job.Stdout.AddListTable()
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	if err := job.Run(); err != nil {
+		t.Fatal(err)
+	}
 	return images
+
 }
 
 func parseRun(args []string) (*runconfig.Config, *runconfig.HostConfig, *flag.FlagSet, error) {
@@ -352,8 +357,4 @@ func parseRun(args []string) (*runconfig.Config, *runconfig.HostConfig, *flag.Fl
 	cmd.SetOutput(ioutil.Discard)
 	cmd.Usage = nil
 	return runconfig.Parse(cmd, args)
-}
-
-func getDaemon(eng *engine.Engine) *daemon.Daemon {
-	return eng.HackGetGlobalVar("httpapi.daemon").(*daemon.Daemon)
 }
